@@ -79,7 +79,7 @@ class block_default_forward_pass{
     player* player_;
 public:
     block_default_forward_pass(GL::Texture2D& atlas):
-        fwd{"blocks"}{
+        fwd{"../../src/engine/res/fx/blocks"}{
             fwd.texture("atlas", atlas);
             fwd.uniform("sun_color", Vector3(1,1,1));
         }

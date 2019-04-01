@@ -6,7 +6,7 @@
 			layout(location = 5) in vec3 nml;
 			uniform int x0,y0;
 
-			out vec4 col;
+			out vec3 col;
 			out vec2 coord;
 			out float z;
 			uniform mat4x4 projection, view;
@@ -40,7 +40,7 @@ void main(){
 				coord=uv+vec2(float(which)/256.0,0.0);
 				vec4 vpos=projection*view*vec4(position.xyz,1.0);
 				z=vpos.z/vpos.w;
-				col=L1x*sun_color;
+				col=float(L1x)*sun_color;
 				gl_Position=vpos;
 				
 			}

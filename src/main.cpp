@@ -57,7 +57,7 @@ public:
     player_name = arguments.argc > 1 ? arguments.argv[1] : "new_player";
     std::unique_ptr<Trade::AbstractImporter> importer =
         manager.loadAndInstantiate("AnyImageImporter");
-    importer->openFile(std::string("atlas.tga"));
+    importer->openFile(std::string("../../src/engine/res/art/atlas.tga"));
     Containers::Optional<Trade::ImageData2D> image = importer->image2D(0);
     CORRADE_INTERNAL_ASSERT(image);
     atlas.setWrapping(GL::SamplerWrapping::Repeat)
@@ -67,6 +67,15 @@ public:
         .setSubImage(0, {}, *image)
         .generateMipmap();
     block_pass=new block_default_forward_pass(atlas);
+    load_world("world");
+    int x,y,z;
+    spawn();
+    Vector3 pos=scene_.get_player(0)->get_position();
+    x=pos.x();
+    y=pos.y();
+    z=std::max(pos.z()-1.0,0.0);
+    w_->set_voxel(x,y,z,STONE);
+    
   }
   void load_world(std::string name) {
     bool new_world;
@@ -74,8 +83,7 @@ public:
     if (new_world) {
       w_->save_all();
     }
-    assert(argc > 1);
-    std::string player_name = std::string(argv[1]);
+    
   }
   void menu() {
     std::cout << "Enter a world name to start:";

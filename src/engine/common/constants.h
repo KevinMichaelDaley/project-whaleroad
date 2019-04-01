@@ -1,3 +1,4 @@
+#pragma once
 namespace constants {
 constexpr const unsigned int WORLD_HEIGHT = 2048;
 constexpr const unsigned int UDP_MTU = 576;

@@ -1,0 +1,3 @@
+[submodule "src/extern/concurrentqueue"]
+	path = src/extern/concurrentqueue
+	url = https://github.com/moodycamel/concurrentqueue.git

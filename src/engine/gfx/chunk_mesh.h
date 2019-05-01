@@ -61,17 +61,13 @@ class chunk_mesh : public drawable {
   int Nverts;
   bool changed;
   typedef GL::Attribute<0, UnsignedInt> L1;
-  typedef GL::Attribute<1, UnsignedInt> L2;
-  typedef GL::Attribute<2, UnsignedInt> L3;
-  typedef GL::Attribute<3, Vector3> pos;
-  typedef GL::Attribute<4, Vector2> uv;
-  typedef GL::Attribute<5, Vector3> nml;
+  typedef GL::Attribute<1, Vector3> pos;
+  typedef GL::Attribute<2, Vector2> uv;
+  typedef GL::Attribute<3, Vector3> nml;
 
 public:
   struct BVertex {
     uint32_t L1;
-    uint32_t L2;
-    uint32_t L3;
   };
 
 protected:

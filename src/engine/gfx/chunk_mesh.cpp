@@ -6,22 +6,17 @@
 bool chunk_mesh::gen_instance(int x, int y, int z, block_t b,
                               unsigned char *Lf) {
 
-  chunk_mesh::BVertex v = {0, 0, 0};
+  chunk_mesh::BVertex v = {0};
   uint32_t x2 = (unsigned int)(x);
   uint32_t y2 = (unsigned int)(y);
   uint32_t z2 = (unsigned int)(z);
   uint32_t xydiff = x2 * 16 + y2;
   uint32_t which = (unsigned int)std::abs(b);
-  uint32_t L1 = uint32_t(Lf[0]) + (uint32_t(Lf[1]) << 8uL) +
-                (uint32_t(Lf[2]) << 16uL) + (uint32_t(Lf[3]) << 24uL);
-  uint32_t L2 = uint32_t(Lf[4]) + (uint32_t(Lf[5]) << 8uL) +
-                (uint32_t(Lf[6]) << 16uL) + (uint32_t(Lf[7]) << 24uL);
-  uint32_t L3 = uint32_t(Lf[8]) + (uint32_t(z2) << 8uL) +
-                (uint32_t(xydiff) << 16uL) + (uint32_t(which) << 24uL);
+  unsigned char L=Lf[0]/16;
+  uint32_t L1 = uint32_t(L) + (uint32_t(z2) << 4uL) +
+                (uint32_t(xydiff) << 14uL) + (uint32_t(which) << 22uL);
 
   v.L1 = L1;
-  v.L2 = L2;
-  v.L3 = L3;
   verts[Nverts++] = v;
   return true;
 }
@@ -35,7 +30,7 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
   if (!valid) {
     return;
   }
-  for (z = 0; z <= std::min(zmax, 255);
+  for (z = 0; z <= std::min(unsigned(zmax), unsigned(constants::WORLD_HEIGHT));
        z += std::max(int(skip_invisible_array[z]), 1)) {
     block_t b2 = (&b)[z];
 
@@ -45,7 +40,7 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
       continue;
     }
 
-    gen_instance((x), (y), (z), b2, &(L[(z)*9]));
+    gen_instance((x), (y), (z), b2, &(L[(z)* constants::LIGHT_COMPONENTS]));
   }
 }
 
@@ -124,14 +119,14 @@ chunk_mesh::chunk_mesh() : vbo_sz(0) {
   vertexBufferCube.setData(vertices, GL::BufferUsage::StaticDraw);
   indexBufferCube.setData(indices, GL::BufferUsage::StaticDraw);
   mesh.setPrimitive(GL::MeshPrimitive::Triangles)
-      .addVertexBufferInstanced(vertexBuffer, 1, 0, L1{}, L2{}, L3{})
+      .addVertexBufferInstanced(vertexBuffer, 1, 0, L1{})
       .addVertexBuffer((vertexBufferCube), 0, pos{}, uv{}, nml{})
       .setIndexBuffer((indexBufferCube), 0, GL::MeshIndexType::UnsignedByte)
       .setInstanceCount(0)
       .setCount(max_index);
 
   mesh_points.setPrimitive(GL::MeshPrimitive::Points)
-      .addVertexBuffer(vertexBuffer, 0, L1{}, L2{}, L3{})
+      .addVertexBuffer(vertexBuffer, 0, L1{})
       .setCount(0);
   changed = false;
   Nverts = 0;

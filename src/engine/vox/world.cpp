@@ -76,7 +76,7 @@ bool world_page::load() { // load the page into memory from the file (or network
   }
   blocks = new block_t[(uint64_t)dim * dim * constants::WORLD_HEIGHT];
   invisible_blocks =
-      new uint8_t[(uint64_t)(dim * dim * constants::WORLD_HEIGHT)];
+      new uint16_t[(uint64_t)(dim * dim * constants::WORLD_HEIGHT)];
   std::memset(blocks, 0,
               (uint64_t)dim * dim * constants::WORLD_HEIGHT * sizeof(block_t));
   stream *f = world_builder::get_file_with_offset_r(Vector3i{x0, y0, z0});
@@ -86,7 +86,7 @@ bool world_page::load() { // load the page into memory from the file (or network
   } else {
         //world_builder::generate(blocks, dim, {x0, y0, z0});
   }
-  dirty_list = new uint64_t[(uint64_t)(dim * dim) / 32];
+  dirty_list = new uint64_t[(uint64_t)(dim * dim) / 32]; 
   std::memset(dirty_list, 0xff, (uint64_t)(dim * dim) / 32 * sizeof(uint64_t));
   std::memset(invisible_blocks, 0x0,
               (uint64_t)(dim * dim) * constants::WORLD_HEIGHT *
@@ -99,8 +99,8 @@ bool world_page::load() { // load the page into memory from the file (or network
     }
   }
   light =
-      (uint8_t *)malloc((uint64_t)dim * dim * constants::WORLD_HEIGHT * 9uL);
-  std::memset(light, 0xff, (uint64_t)(dim * dim) * constants::WORLD_HEIGHT * 9);
+      (uint8_t *)malloc((uint64_t)dim * dim * constants::WORLD_HEIGHT * constants::LIGHT_COMPONENTS);
+  std::memset(light, 0xff, (uint64_t)(dim * dim) * constants::WORLD_HEIGHT * constants::LIGHT_COMPONENTS);
   return true;
 }
 
@@ -186,13 +186,13 @@ block_t & world_page::get(
                  // new, allocate it and empty all the memory to default values.
     blocks = new block_t[(uint64_t)dim * dim * constants::WORLD_HEIGHT];
     light =
-        (uint8_t *)malloc((uint64_t)dim * dim * constants::WORLD_HEIGHT * 9uL);
+        (uint8_t *)malloc((uint64_t)dim * dim * constants::WORLD_HEIGHT * constants::LIGHT_COMPONENTS);
     invisible_blocks =
-        new uint8_t[(uint64_t)(dim * dim * constants::WORLD_HEIGHT)];
+        new uint16_t[(uint64_t)(dim * dim * constants::WORLD_HEIGHT)];
     dirty_list = new uint64_t[dim * dim / 32];
     std::memset(blocks, 0,
                 dim * dim * constants::WORLD_HEIGHT * sizeof(block_t));
-    std::memset(light, 255, 9u * (uint64_t)dim * dim * constants::WORLD_HEIGHT);
+    std::memset(light, 255,  constants::LIGHT_COMPONENTS * (uint64_t)dim * dim * constants::WORLD_HEIGHT);
     std::memset(dirty_list, 255, dim * dim / 32 * sizeof(uint64_t));
     std::memset(invisible_blocks, 255,
                 (uint64_t)dim * dim * constants::WORLD_HEIGHT *
@@ -221,24 +221,24 @@ uint8_t *world_page::get_light(
                  // new, allocate it and empty all the memory to default values.
     blocks = new block_t[(uint64_t)dim * dim * constants::WORLD_HEIGHT];
     light =
-        (uint8_t *)malloc((uint64_t)dim * dim * constants::WORLD_HEIGHT * 9uL);
+        (uint8_t *)malloc((uint64_t)dim * dim * constants::WORLD_HEIGHT * constants::LIGHT_COMPONENTS);
     invisible_blocks =
-        new uint8_t[(uint64_t)(dim * dim * constants::WORLD_HEIGHT)];
+        new uint16_t[(uint64_t)(dim * dim * constants::WORLD_HEIGHT)];
     dirty_list = new uint64_t[dim * dim / 32];
     std::memset(blocks, 0,
                 dim * dim * constants::WORLD_HEIGHT *
                     sizeof(block_t)); // if blocks is 0 we return a default
                                       // terrain which is static and repeating.
     std::memset(light, (uint8_t)0xffu,
-                9u * (uint64_t)dim * dim * constants::WORLD_HEIGHT);
+                 constants::LIGHT_COMPONENTS * (uint64_t)dim * dim * constants::WORLD_HEIGHT);
     std::memset(dirty_list, 0xff, dim * dim / 32 * sizeof(uint64_t));
     std::memset(invisible_blocks, (uint8_t)0xffu,
                 (uint64_t)dim * dim * constants::WORLD_HEIGHT *
                     sizeof(uint16_t));
   }
   return &(light[(uint64_t)((x - x0) * dim * constants::WORLD_HEIGHT +
-                            (y - y0) * constants::WORLD_HEIGHT + z - z0) *
-                 9uL]); // light values, like block values, are guaranteed to be
+                            (y - y0) * constants::WORLD_HEIGHT + z - z0) 
+                 * constants::LIGHT_COMPONENTS]); // light values, like block values, are guaranteed to be
                         // contiguous within pages.
 }
 bool world_page::set(
@@ -252,9 +252,9 @@ bool world_page::set(
   if (blocks == nullptr && !load()) {
     blocks = new block_t[(uint64_t)dim * dim * constants::WORLD_HEIGHT];
     light =
-        (uint8_t *)malloc((uint64_t)dim * dim * constants::WORLD_HEIGHT * 9uL);
+        (uint8_t *)malloc((uint64_t)dim * dim * constants::WORLD_HEIGHT * constants::LIGHT_COMPONENTS);
     invisible_blocks =
-        new uint8_t[(uint64_t)(dim * dim * constants::WORLD_HEIGHT)];
+        new uint16_t[(uint64_t)(dim * dim * constants::WORLD_HEIGHT)];
     dirty_list = new uint64_t[dim * dim / 32];
     std::memset(blocks, 0,
                 dim * dim * constants::WORLD_HEIGHT * sizeof(block_t));
@@ -289,7 +289,7 @@ bool world_page::set(
             uint64_t mask = (uint64_t)1uL << (uint64_t)(
                                 (uint64_t)((x + i) % 8uL) * (uint64_t)4uL +
                                 (uint64_t)((y + j) % 4uL));
-            dirty_list[(x + i) / 8 * (dim / 4) + (y + j) / 4] |= mask;
+            dirty_list[(x - x0 + i) / 8 * (dim / 4) + (y-y0 + j) / 4] |= mask;
             rle_update_mask |= 1u << ((i + 1) * 2 + (j + 1));
           }
           all = all && (std::abs(b0) > WATER);
@@ -304,11 +304,13 @@ bool world_page::set(
   ix = (x - x0) * dim + (y - y0);
   int k, j = 0;
   int run_length = 0;
-  if (blocks[ix * constants::WORLD_HEIGHT + z - 1] == 0 && b != 0) {
-    int k2 = z - 1;
-    while (blocks[ix * constants::WORLD_HEIGHT + k2] == 0) {
-      blocks[ix * constants::WORLD_HEIGHT + k2] = AIR;
-      --k2;
+  if(z>1){
+    if (blocks[ix * constants::WORLD_HEIGHT + z - 1] == 0 && b != 0) {
+        int k2 = z - 1;
+        while (blocks[ix * constants::WORLD_HEIGHT + k2] == 0) {
+            blocks[ix * constants::WORLD_HEIGHT + k2] = AIR;
+            --k2;
+        }
     }
   }
   if (update_neighboring_pvs) { // update the skippable list (list of blocks
@@ -375,7 +377,7 @@ bool world_page::set(
   uint64_t mask = (uint64_t)1uL
                   << (uint64_t)((uint64_t)(x % 8uL) * (uint64_t)4uL +
                                 (uint64_t)(y % 4uL));
-  dirty_list[x / 8 * (dim / 4) + y / 4] |= mask;
+  dirty_list[(x-x0) / 8 * (dim / 4) + (y-y0) / 4] |= mask;
   return true;
 }
 void world_page::reset_diff() {
@@ -455,7 +457,7 @@ world_page& world::get_page(int i, int j, int k){
             return current_[i];
         }
     }
-    current_[num_pages%constants::MAX_RESIDENT_PAGES]=world_page(i,j,k,1024);
+    current_[num_pages%constants::MAX_RESIDENT_PAGES]=world_page(i,j,k,constants::PAGE_DIM);
     return current_[num_pages%constants::MAX_RESIDENT_PAGES];
 }
 int world::get_z(int i, int j, uint16_t *skip_invisible_array,
@@ -500,10 +502,13 @@ int world::get_z(int i, int j, uint16_t *skip_invisible_array,
     skip_invisible_array[k] = rl;
     k += 1;
   }
-  return zmax;
+  return zmax; 
 }
 
 uint64_t &world_page::has_changes_in_8x4_block(int x, int y) {
+  if(dirty_list==nullptr){
+      load();
+  }
   int xi = (x - x0) / 8;
   int yi = (y - y0) / 4;
   return dirty_list[(uint64_t)(xi * (dim / 4uL) + yi)];
@@ -544,7 +549,7 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
 
         uint16_t *skip2 = &skip_neighbors[((dy + 31) * 63 + dx + 31) *
                                           constants::WORLD_HEIGHT];
-        int zcol = z_neighbors[i];
+        int zcol = z_neighbors[((dy + 31) * 63 + dx + 31)];
 
         for (int dz = 32 - dx; dz < 32; dz += skip2[i + dz]) { // z offset
 
@@ -576,8 +581,8 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
     }
 
     
-      uint8_t L_old = Lbase[i*9], L_new = ao*(256/64);
-      Lbase[i*9] = L_new;
+      uint8_t L_old = Lbase[i* constants::LIGHT_COMPONENTS], L_new = ao*(256/64);
+      Lbase[i* constants::LIGHT_COMPONENTS] = L_new;
       uint8_t delta=std::abs(L_new - L_old);
       max_delta = std::max(delta, max_delta);
       //     }

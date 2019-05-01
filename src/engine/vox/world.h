@@ -37,7 +37,7 @@ private:
                    // info).  The block value at point P=(x+x0,y+y0,z+z0) is at
                    // index i=(x*dim+y)*WORLD_HEIGHT+z of this array.
   unsigned char *light;
-  uint8_t  *invisible_blocks;
+  uint16_t  *invisible_blocks;
   uint64_t
       *dirty_list; // a bitfield for each 8x4 square region along the xy plane.
                    // Setting bit 32 triggers a mesh update around the region.

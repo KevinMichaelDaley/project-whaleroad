@@ -34,16 +34,15 @@ public:
 class worldgen_stream: public stream{
     std::string method;
     stream_mode mode;
-    int offset_x, offset_y, offset_z;
     void* so;
-    int offset_read_head;
-    int i, j, k;
+    int64_t ij;
+    int16_t k;
 public:
-    typedef block_t (*generator)(int, int, int, block_t*, int*);
+    typedef block_t (*generator)(int, int, block_t*, int*);
 private:
     generator generate;
 public:
-    void get_generated_run(int x, int y, int z, block_t* b, int* n){
+    void get_generated_run(int xy, int z, block_t* b, int* n){
         if(method.compare("default")==0){
             if(z<10){
                 b[0]=SANDSTONE; n[0]=10-z;
@@ -55,13 +54,18 @@ public:
             return;
         }
         if(generate==nullptr){ b[0]=0; n[0]=constants::WORLD_HEIGHT-z; return;}
-        generate(x,y,z,b,n);
+        generate(xy,z,b,n);
     }
     worldgen_stream(std::string m, stream_mode md, int ox, int oy, int oz){
         method=m;
         mode=md;
-        offset_x=ox; offset_y=oy; offset_z=oz;
-        i=j=k=0;
+        so=nullptr;
+        ij=0;
+        for(int i=0; i<32; ++i){
+            ij+=((int64_t)(ox>>i)&1)<<(int64_t)(2*i);
+            ij+=((int64_t)(oy>>i)&1)<<(int64_t)(2*i+1);
+        }
+        k=0;
         generate=nullptr;
         if(method.compare("default")){
             so=dlopen(("../../src/engine/proc/terrain/gen_"+method+".so").c_str(), RTLD_NOW);
@@ -70,23 +74,18 @@ public:
     }
     virtual size_t read(char* output, size_t size){
         assert(mode & STREAM_READ);
-        for(int off=offset_read_head; off<size/sizeof(block_t)+offset_read_head; off+=2){
+        for(int off=0; off<size/sizeof(block_t); off+=2){
             block_t b; int n;
-            get_generated_run(i+offset_x,j+offset_y,k+offset_z, &b, &n);
-            n=std::min(constants::WORLD_HEIGHT-(k+offset_z),(unsigned) n);
-            ((block_t*)output)[off-offset_read_head]=b;
-            ((block_t*)output)[off-offset_read_head+sizeof(block_t)]=n;
+            get_generated_run(ij, k, &b, &n);
+            n=std::min(constants::WORLD_HEIGHT-(k),(unsigned) n);
+            ((block_t*)output)[off]=b;
+            ((block_t*)output)[off+1]=n;
             k+=n;
-            if(k+offset_z>constants::WORLD_HEIGHT){
-                j++;
+            if(k>constants::WORLD_HEIGHT){
+                ij++;
                 k=0;
             }
-            if(j%1024==0){
-                i++;
-                j=0;
-            }
         }
-        offset_read_head+=size;
         return size;
     }
     virtual size_t write(const char* output, size_t size){

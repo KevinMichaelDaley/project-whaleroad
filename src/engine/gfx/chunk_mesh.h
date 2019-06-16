@@ -61,13 +61,15 @@ class chunk_mesh : public drawable {
   int Nverts;
   bool changed;
   typedef GL::Attribute<0, UnsignedInt> L1;
-  typedef GL::Attribute<1, Vector3> pos;
-  typedef GL::Attribute<2, Vector2> uv;
-  typedef GL::Attribute<3, Vector3> nml;
+  typedef GL::Attribute<1, UnsignedInt> L2;
+  typedef GL::Attribute<2, Vector3> pos;
+  typedef GL::Attribute<3, Vector2> uv;
+  typedef GL::Attribute<4, UnsignedInt> nml;
 
 public:
   struct BVertex {
     uint32_t L1;
+    uint32_t L2;
   };
 
 protected:
@@ -84,7 +86,7 @@ public:
   void update(world* w);
   void gen(world* w);
   void gen_column(int x, int y, world* w);
-  bool gen_instance(int x, int y, int z, block_t b, unsigned char *Lf);
+  bool gen_instance(int x, int y, int z, block_t b, unsigned int *Lf);
   void copy_back();
   void start_at(int x, int y);
   chunk_mesh();

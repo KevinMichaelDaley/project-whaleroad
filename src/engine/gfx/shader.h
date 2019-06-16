@@ -39,9 +39,11 @@ public:
     vert.addSource(src_vert);
     frag.addSource(src_frag);
 
-    CORRADE_INTERNAL_ASSERT_OUTPUT(GL::Shader::compile({vert, frag}));
+    CORRADE_INTERNAL_ASSERT_OUTPUT(vert.compile());
+    CORRADE_INTERNAL_ASSERT_OUTPUT(frag.compile());
 
-    attachShaders({vert, frag});
+    attachShader(vert);
+    attachShader(frag);
 
     CORRADE_INTERNAL_ASSERT_OUTPUT(link());
   }
@@ -67,6 +69,7 @@ public:
       sampler = (samplers_.size());
       samplers_[s] = sampler;
     }
+    v.bind(sampler);
     uniform(s, sampler);
     return sampler;
   }
@@ -77,14 +80,18 @@ class block_default_forward_pass{
     shader fwd;
     scene* scene_;
     player* player_;
+    GL::Texture2D* atlas_;
 public:
     block_default_forward_pass(GL::Texture2D& atlas):
         fwd{"../../src/engine/res/fx/blocks"}{
-            fwd.texture("atlas", atlas);
+            atlas_=&atlas;
+            fwd.texture("atlas", *atlas_);
             fwd.uniform("sun_color", Vector3(1,1,1));
         }
     block_default_forward_pass& set_scene(scene* s){
         scene_=s;
+        fwd.texture("atlas", *atlas_);
+        fwd.uniform("sun_color", Vector3(1,1,1));
         return *this;
     }
     block_default_forward_pass& set_player(player* p){
@@ -93,6 +100,8 @@ public:
     }
     block_default_forward_pass& draw_world_view(world_view* wv){
         auto all_chunks=wv->get_all_visible();
+        fwd.uniform("view", player_->get_cam().view);
+        fwd.uniform("projection", player_->get_cam().projection);
         for(int i=0,e=all_chunks.size(); i<e; ++i){
             chunk_mesh* chunk=all_chunks[i];
             chunk->copy_to_gpu();

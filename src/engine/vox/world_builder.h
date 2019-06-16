@@ -1,3 +1,4 @@
+#pragma once
 #include "block.h"
 #include "common/constants.h"
 #include "common/stream.h"
@@ -29,13 +30,16 @@ public:
   static stream * get_file_with_offset_w(Vector3i page_offset);
   
   static void unmap_world_file();
+  ~world_builder(){
+      unmap_world_file();
+  }
 };
 
 class worldgen_stream: public stream{
     std::string method;
     stream_mode mode;
     void* so;
-    int64_t ij;
+    uint64_t ij;
     int16_t k;
 public:
     typedef block_t (*generator)(int, int, block_t*, int*);
@@ -45,7 +49,10 @@ public:
     void get_generated_run(int xy, int z, block_t* b, int* n){
         if(method.compare("default")==0){
             if(z<10){
-                b[0]=SANDSTONE; n[0]=10-z;
+                b[0]=-SAND; n[0]=10-z;
+            }
+            else if(z==10){
+                b[0]=SAND; n[0]=1;
             }
             else{
                 b[0]=0;
@@ -61,9 +68,9 @@ public:
         mode=md;
         so=nullptr;
         ij=0;
-        for(int i=0; i<32; ++i){
-            ij+=((int64_t)(ox>>i)&1)<<(int64_t)(2*i);
-            ij+=((int64_t)(oy>>i)&1)<<(int64_t)(2*i+1);
+        for(unsigned i=0; i<32; ++i){
+            ij+=((uint64_t)((ox>>i)&1u))<<(uint64_t)(2u*i);
+            ij+=((uint64_t)((oy>>i)&1u))<<(uint64_t)(2u*i+1u);
         }
         k=0;
         generate=nullptr;
@@ -74,14 +81,14 @@ public:
     }
     virtual size_t read(char* output, size_t size){
         assert(mode & STREAM_READ);
-        for(int off=0; off<size/sizeof(block_t); off+=2){
+        for(size_t off=0; off<size/sizeof(block_t); off+=2u){
             block_t b; int n;
             get_generated_run(ij, k, &b, &n);
-            n=std::min(constants::WORLD_HEIGHT-(k),(unsigned) n);
+            n=std::min(constants::WORLD_HEIGHT-(k), n);
             ((block_t*)output)[off]=b;
             ((block_t*)output)[off+1]=n;
             k+=n;
-            if(k>constants::WORLD_HEIGHT){
+            if(k>=constants::WORLD_HEIGHT){
                 ij++;
                 k=0;
             }
@@ -95,5 +102,8 @@ public:
     
     virtual void close(){
         if(so) {dlclose(so); so=nullptr;}
+    }
+    ~worldgen_stream(){
+        close();
     }
 };

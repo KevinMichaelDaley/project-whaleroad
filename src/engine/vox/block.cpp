@@ -7,6 +7,7 @@ bool block_is_opaque(block_t block) {
   return block_is_visible(std::abs(block)) && block != WATER;
 }
 bool block_is_visible(block_t block) { return block > 0 && block != AIR; }
+int block_emissive_strength(block_t block) { return 0; }
 bool block_is_solid(block_t block) {
   return block_is_visible(std::abs(block)) && block != WATER;
 }

@@ -22,7 +22,7 @@
     fd=open(wfilename.c_str(),O_RDWR);
     fsize=lseek(fd, 0, SEEK_END);
     lseek(fd,0,SEEK_SET);
-    fptr=mmap(0, fsize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    fptr=mmap(nullptr, fsize, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     return fptr;
   }
 

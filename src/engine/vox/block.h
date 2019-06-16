@@ -11,5 +11,6 @@ static block_t sky_column[65536] = {EMPTY};
 bool block_is_slippery(block_t block);
 bool block_is_opaque(block_t block);
 bool block_is_visible(block_t block);
+int block_emissive_strength(block_t block);
 bool block_is_solid(block_t block);
 void block_albedo(block_t block, float &r, float &g, float &b);

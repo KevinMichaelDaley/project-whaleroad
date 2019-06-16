@@ -22,6 +22,7 @@ public:
       : jump_speed(3.0f), name_(name),
         character(wld, sx, sy, sz, spawn_random, spawn_on_surface) {
     block_last = 0;
+    lag=0;
     place_block = STONE;
     left_mouse_down = false;
     right_mouse_down = false;
@@ -29,7 +30,7 @@ public:
     chisel_strength = 1;
     max_block_health = -1;
     look_x = 0;
-    look_y = 0;
+    look_y = 1;
     jump_down = false;
     w_down = false;
     a_down = false;
@@ -88,6 +89,7 @@ public:
     look_y += y * sensitivity;
   }
   double block_last;
+  int lag;
   int place_block;
   bool left_mouse_down;
   virtual void update(float dt) {
@@ -106,7 +108,7 @@ public:
       jump(7.0f);
       jump_down = false;
     }
-
+    viewProj=cam.projection*cam.view;
     if (left_mouse_down) {
       float xx, yy, zz;
       float rx, ry, rz;
@@ -155,11 +157,12 @@ public:
               }
             }
           }
-          if (dot > 0) {
+          if (dot > 0 && lag<0) {
             // if(inventory.has(place_block,1);
             wld->set_voxel(std::floor(target[0] + 0.5 + nml.x()),
                            std::floor(target[1] + 0.5 + nml.y()),
                            std::floor(target[2] + 0.5 + nml.z()), place_block);
+            lag=50;
           }
 
           // inventory.remove(place_block,1);
@@ -169,6 +172,7 @@ public:
         block_last = now();
       }
     }
+    --lag;
     if (right_mouse_down) {
       float xx, yy, zz;
       float rx, ry, rz;
@@ -195,7 +199,7 @@ public:
           if (b > WATER) {
             if (floor(x2) != target[0] || floor(y2) != target[1] ||
                 floor(z2) != target[2]) {
-              block_health = (b == STONE || b == SANDSTONE) ? 4 : 2;
+              block_health = (b == STONE || b == SANDSTONE) ? 10 : 8;
               max_block_health = block_health;
             }
             block_target_type = b;
@@ -215,14 +219,14 @@ public:
           target[2] = -100000;
           max_block_health = -1;
           block_target_type = 0;
-          block_health = 100000000000;
+          block_health = 100000;
         }
       }
     }
     ((character*)this)->update_physics(dt);
     look(look_x, look_y, dt, 0);
-    look_x = 0;
-    look_y = 0;
+    look_x=0;
+    look_y=0;
     Vector3 eye, fw, up;
     ((character*)this)->get_eye_basis(eye,fw,up);
     cam.look_at(eye,fw,up);

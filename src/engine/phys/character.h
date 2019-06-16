@@ -42,19 +42,19 @@ public:
   world* get_world(){
       return wld_;
   }
-  void dir(float rx, float ry, float rz){
+  void dir(float& rx, float& ry, float& rz){
       rx=look_vector[0];
       ry=look_vector[1];
       rz=look_vector[2];
   }
-  void eye(float rx, float ry, float rz){
+  void eye(float& rx, float& ry, float& rz){
       rx=eye_positions[0]+x[0];
       ry=eye_positions[1]+x[1];
       rz=eye_positions[2]+x[2];
   }
   character(world* wld, float xx = 0, float yy = 0, float zz = 0, bool spawn_random = true,
             bool spawn_on_surface = true, float rx = 0.3, float ry = 0.3,
-            float rz = 1.5, float eye_height = 1.25, float angle = 0){
+            float rz = 0.5, float eye_height = 0.35, float angle = 0){
     wld_=wld;
     first_frame = true;
     health = 1.0f;
@@ -65,7 +65,7 @@ public:
     if (spawn_on_surface || spawn_random) {
       zz = std::max(std::max(get_world()->get_z(xx, yy) + 13,
                              get_world()->ocean_level + 13),
-                    10);
+                    11);
     }
     set_position(xx, yy, zz);
     set_velocity(0.0f, 0.0f, 0.0f);
@@ -141,7 +141,7 @@ public:
     walk_vector[2] = 0;
   }
   void set_climb_dir(float dir) { climb_dir = dir; }
-  float signed_distance_to(float x2[0]) {
+  float signed_distance_to(float x2[3]) {
     x2[0] -= x[0];
     x2[1] -= x[1];
     x2[2] -= x[2];
@@ -447,9 +447,9 @@ public:
     look_vector[0] = fwd.x();
     look_vector[1] = fwd.y();
     look_vector[2] = fwd.z();
-    up_vector[0] = up2.x();
-    up_vector[1] = up2.y();
-    up_vector[2] = up2.z();
+    //up_vector[0] = up2.x();
+    //up_vector[1] = up2.y();
+    //up_vector[2] = up2.z();
   } /*
   void look(float x, float y, float dt, int which_head) {
           float q[4];

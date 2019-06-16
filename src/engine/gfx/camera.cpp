@@ -47,7 +47,7 @@ void camera::set_ortho(Vector2 new_scale, float new_near_clip, float new_far_cli
 }
 void camera::look_at(Vector3 eye_position, Vector3 eye_direction, Vector3 up) {
   view = Matrix4::lookAt(eye_position, eye_position + eye_direction, up)
-             .invertedRigid();
+             .inverted();
 }
 /*
 std::array<plane_t, 6> camera::frustum() {
@@ -65,6 +65,6 @@ std::array<plane_t, 6> camera::frustum() {
 }*/
 camera::camera()
     : view(Matrix4{}), perspective(false), fov(100),
-      aspect(16.0 / 9.0), near_clip(0.1), far_clip(10000.0) {
-  set_perspective(100, 16.0 / 9.0, 0.1, 10000.0);
+      aspect(16.0 / 9.0), near_clip(0.1), far_clip(1000.0) {
+  set_perspective(100, 16.0 / 9.0, 0.1, 1000.0);
 }

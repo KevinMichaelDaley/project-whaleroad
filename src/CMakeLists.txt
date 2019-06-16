@@ -35,14 +35,16 @@ project(islands)
 # Add module path in case this is project root
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/modules/")
 find_package(SDL2 REQUIRED)
+find_package(JeMalloc REQUIRED)
 find_package(Magnum REQUIRED GL Trade Sdl2Application)
-
+find_package(Corrade REQUIRED Utility)
 set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
-include_directories(${PROJECT_SOURCE_DIR}/engine)
+include_directories(${PROJECT_SOURCE_DIR}/engine ${JEMALLOC_INCLUDE_DIR})
 FILE(GLOB SOURCE_FILES engine/*/*.cpp main.cpp)
-add_executable(islands ${SOURCE_FILES})
+corrade_add_resource(Resources resources.conf)
+add_executable(islands ${SOURCE_FILES} ${Resources})
 target_link_libraries(islands
     Magnum::Application
-    Magnum::GL
+    Magnum::GL  
     Magnum::Magnum
-Magnum::Trade pthread )
+    Magnum::Trade pthread Corrade::Utility ${JEMALLOC_LIBRARIES})

@@ -65,9 +65,9 @@ public:
       yy = ((rand() % 10)) + 1000;
     }
     if (spawn_on_surface || spawn_random) {
-      zz = std::max(std::max(get_world()->get_z(xx, yy) + 13,
+      zz = std::max(std::max(get_world()->get_z(xx, yy,nullptr,nullptr) + 13,
                              get_world()->ocean_level + 13),
-                    11);
+                    100);
     }
     set_position(xx, yy, zz);
     set_velocity(0.0f, 0.0f, 0.0f);

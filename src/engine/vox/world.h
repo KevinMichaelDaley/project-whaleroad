@@ -124,10 +124,10 @@ public:
                                                     updated_center{true}
                                     {
                                         
-                                        input=new uint8_t[constants::WORLD_HEIGHT*200*200*(constants::LIGHT_COMPONENTS+3)]; 
+                                        input=new uint8_t[constants::WORLD_HEIGHT*800*800*(constants::LIGHT_COMPONENTS+3)]; 
                                         
-                                        neighbor_mask=new bool[200*200];
-                                        
+                                        neighbor_mask=new bool[800*800];
+                                            
                                     }
   void update_center(Vector3 player_position) ;
   void update_occlusion(int subradius) ;

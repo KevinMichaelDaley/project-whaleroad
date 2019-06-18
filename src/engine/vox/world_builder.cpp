@@ -10,13 +10,13 @@
   std::string world_builder::wfilename;
   void* world_builder::fptr;
   bool world_builder::is_generate=false;
-   uint64_t world_builder::mortonEncode(unsigned int x, unsigned int y, unsigned int z){
+   uint64_t world_builder::mortonEncode(unsigned int x, unsigned int y){
         uint64_t answer = 0;
-        for (uint64_t i = 0; i < (sizeof(uint64_t)* 8)/3; ++i) {
-            answer |= ((x & ((uint64_t)1 << i)) << 2*i) | ((y & ((uint64_t)1 << i)) << (2*i + 1)) | ((z & ((uint64_t)1 << i)) << (2*i + 2));
+        for (uint64_t i = 0; i < (sizeof(uint64_t)* 8)/2; ++i) {
+            answer |= ((x & ((uint64_t)1 << i)) << i) | ((y & ((uint64_t)1 << i)) << (i + 1));
         }
         return answer;
-    }
+    }   
 
    void* world_builder::map_file(){
     fd=open(wfilename.c_str(),O_RDWR);
@@ -46,15 +46,15 @@
   
   stream *  world_builder::get_file_with_offset_r(Vector3i page_offset){
     if(is_generate){
-        return new worldgen_stream("default", STREAM_READ, page_offset.x(), page_offset.y(), page_offset.z());
+        return new worldgen_stream("default", STREAM_READ, page_offset.x(), page_offset.y(), 0);
     }
-    uint64_t z_order_offset=mortonEncode(page_offset.x(), page_offset.y(), page_offset.z());
+    uint64_t z_order_offset=mortonEncode(page_offset.x(), page_offset.y()); 
     ptrdiff_t offset_in_bytes=z_order_offset*sizeof(block_t);
     return new mmap_stream(((char*)fptr)+offset_in_bytes, fsize-offset_in_bytes, STREAM_READ);
   }
 
    stream *  world_builder::get_file_with_offset_w(Vector3i page_offset){
-    uint64_t z_order_offset=mortonEncode(page_offset.x(), page_offset.y(), page_offset.z());
+    uint64_t z_order_offset=mortonEncode(page_offset.x(), page_offset.y());
     ptrdiff_t offset_in_bytes=z_order_offset*sizeof(block_t);
     return new mmap_stream(((char*)fptr)+offset_in_bytes, fsize-offset_in_bytes, STREAM_WRITE);
   }

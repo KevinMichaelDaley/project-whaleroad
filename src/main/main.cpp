@@ -199,12 +199,12 @@ private:
 #else
     
     if(event.position().x()>windowSize().x()/2){
-        scene_.get_player(0)->mousemove(event.position().x()-pos_x,
-                                     event.position().y()-pos_y);
+        scene_.get_player(0)->mousemove((event.position().x()-pos_x)*0.1,
+                                     (event.position().y()-pos_y)*0.1);
     }
     else{
-        scene_.get_player(0)->strafe(event.position().x()-pos_x<0, (event.position().x()-pos_y*0.01));
-        scene_.get_player(0)->pedal((event.position().y()-pos_y<0), (event.position().y()-pos_y*0.01));
+        scene_.get_player(0)->strafe(event.position().x()-pos_x<0, (event.position().x()-pos_y*0.0005));
+        scene_.get_player(0)->pedal((event.position().y()-pos_y<0), (event.position().y()-pos_y*0.0005));
         
     }
     pos_y=event.position().x(); 

@@ -565,11 +565,11 @@ int world::get_z(int i, int j, uint16_t *skip_invisible_array,
       }
   }
   */
-  int zmax=current->zmap[(i-current->x0)*constants::WORLD_HEIGHT+(j-current->y0)];
+  int zmax=current->zmap[(i-current->x0)*current->dim+(j-current->y0)];
   if (skip_invisible_array == nullptr) return zmax;
   
   block_t *b = &(current->blocks[ii]);
-  for (int k=0; k <= zmax; ) { // the skippable array is stored in the world_page and
+  for (int k=0; k <= std::min(zmax, constants::WORLD_HEIGHT-k); ) { // the skippable array is stored in the world_page and
                       // updated every time we call set_block()
     int rl = current->invisible_blocks[ii + k];
     skip_invisible_array[k] = std::max(rl,1);

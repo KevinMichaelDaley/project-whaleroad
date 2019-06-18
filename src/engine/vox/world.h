@@ -111,7 +111,6 @@ private:
   std::vector<chunk_mesh *> mesh_update_queue;
   int mesh_update_head;
 
-         uint16_t* sun_depth;
         uint8_t* input;
         bool* neighbor_mask;
 public:
@@ -125,10 +124,9 @@ public:
                                                     updated_center{true}
                                     {
                                         
-                                        input=new uint8_t[constants::WORLD_HEIGHT*512*512*4]; 
+                                        input=new uint8_t[constants::WORLD_HEIGHT*200*200*(constants::LIGHT_COMPONENTS+3)]; 
                                         
-                                        sun_depth=new uint16_t[512*512];
-                                        neighbor_mask=new bool[513*513];
+                                        neighbor_mask=new bool[200*200];
                                         
                                     }
   void update_center(Vector3 player_position) ;

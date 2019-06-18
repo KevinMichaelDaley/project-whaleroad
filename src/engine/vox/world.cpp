@@ -231,13 +231,7 @@ block_t & world_page::get(
 
 uint8_t *world_page::get_light(
     int x, int y,
-     int z) { // get the occlusion map pointer for the current array
-             // occlusion is stored as 9 spherical harmonic coefficients (2nd
-             // order) per block it is updated every frame but only for columns
-             // of blocks whose occlusion has changed this is easy to do because
-             // we perform spherical sampling on a constant 45 degree lattice.
-             //(hey, it was almost a 90 degree lattice so don't complain too
-             // much!)
+     int z) { 
   if (!contains(x, y, z)) {
     return nullptr; // if this page doesn't contain this position we cannot
                     // return a useful value.
@@ -246,7 +240,7 @@ uint8_t *world_page::get_light(
       load();
   }
   return &(light[((x - x0) * dim * constants::WORLD_HEIGHT +
-                            (y - y0) * constants::WORLD_HEIGHT + z) 
+                            (y - y0) * constants::WORLD_HEIGHT + z)*constants::LIGHT_COMPONENTS 
                  ]); // light values, like block values, are guaranteed to be
                         // contiguous within pages.
 }
@@ -267,10 +261,12 @@ bool world_page::set(
                 (y - y0) * (int64_t) constants::WORLD_HEIGHT + z ;
 
   
+  block_t bprev=blocks[ix];
     uint8_t rle_update_mask = 0x10u;
     if(update_neighborhood){
         
         bool all = true;
+        int nm=0;
         for (int i = -1; i <= 1; i += 1) {
             for (int j = -1; j <= 1; j += 1) {
               for (int k = -1; k <= 1; k += 1) {
@@ -280,11 +276,14 @@ bool world_page::set(
                 if (!i && !j && !k) {
                     continue;
                 }
+                
                 bool on_border = !contains(x+i, y+j, z+k);
                 int64_t jx = i * (int64_t) constants::WORLD_HEIGHT * (int64_t)dim +
                             j *  (int64_t) constants::WORLD_HEIGHT + k;
                 block_t b0 = (!on_border)? blocks[ix + jx] : wld->get_voxel(x+i,y+j,z+k);
                 if (std::abs(b) <= WATER) {
+                   
+                    //update visibility of neighbor block
                     if(!on_border){
                         blocks[ix + jx] = std::abs(b0);
                         uint64_t mask = (uint64_t)1uL << (uint64_t)(
@@ -297,6 +296,35 @@ bool world_page::set(
                         wld->set_voxel(x+i,y+j,z+k,std::abs(b0),true,false);
                     }
                 }
+                if(std::abs(b0)<=WATER){//FIXME: replace all instances of <= WATER with proper opacity function.
+                     //reflect light from current block if neighbor is transparent and we are adding a new solid block.
+                    if(std::abs(b)>AIR && std::abs(bprev)<=AIR){
+                        uint8_t* L2=wld->get_light(x+i,y+j,z+k);
+                        uint8_t L0[constants::LIGHT_COMPONENTS];
+                        for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
+                            L0[m]=L2[m];
+                        }
+                        for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
+                            int N=0;
+                            int L22=0;
+                            for(int n=0; n<constants::LIGHT_COMPONENTS; ++n){
+                                L22+=L2[n]*(constants::LPV_WEIGHT[n*27+nm]>0)*(constants::LPV_WEIGHT[m*27+nm]<0);
+                            }
+                            L2[m]=std::min((int)L2[m]+L22/4,255);
+                        }
+                    }
+                        
+                        
+                }
+                else if(std::abs(b)<=AIR && std::abs(bprev)>AIR){
+                    for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
+                        uint8_t* L2=wld->get_light(x+i,y+j,z+k);
+                        L2[m]=0;
+                    }
+                }
+                    
+                ++nm;
+                    
                 all = all && (std::abs(b0) > WATER);
             }
         }
@@ -307,11 +335,12 @@ bool world_page::set(
         }
     }
   
-  block_t bprev=blocks[ix];
                 
   blocks[ix] = b;
-  if(b<0){
-      light[ix]=0;
+  if(b>1){
+      for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
+        light[ix*constants::LIGHT_COMPONENTS+m]=0u;
+      }
   }
   ix = (x - x0) * dim + (y - y0);
   int k, j = 0;
@@ -359,11 +388,12 @@ bool world_page::set(
   }
   
   if(b>1){
-    for(int i=0; i<=z; ++i){
-      light[((x - x0) * dim + (y - y0))*constants::WORLD_HEIGHT+i]=0;
-    }
-    
     zmap[(x-x0)*dim+(y-y0)]=std::max((int)zmap[(x-x0)*dim+(y-y0)],z+1);
+    for(int i=0; i<=z; ++i){
+        for(int m=0; m<constants::LIGHT_COMPONENTS; m+=6){
+            light[(((x - x0) * dim + (y - y0))*constants::WORLD_HEIGHT+i)*constants::LIGHT_COMPONENTS+m]=0u;
+        }
+    }
   }
   if(std::abs(b)<=1){
       int z0=constants::WORLD_HEIGHT-1;
@@ -394,7 +424,7 @@ bool world_page::set(
         }
         int zmax=z0+1;
         zmap[(x-x0)*dim+(y-y0)]=zmax;
-        light[((x-x0)*dim+(y-y0))*constants::WORLD_HEIGHT+zmax]=255;
+        
       }
       
   }
@@ -407,13 +437,13 @@ bool world_page::set(
 void world_page::reset_diff() {
   std::memset(dirty_list, 0, (dim * dim / 32) * sizeof(uint64_t));
 }
-static uint8_t l[3] = {255, 255, 255};
+static uint8_t l[constants::LIGHT_COMPONENTS*constants::WORLD_HEIGHT] = {255u};
 uint8_t *world::get_light(int x, int y, int z) {
   world_page* current=get_page(x,y,z);
-  if (!current->nulled) {
+  if (!current->nulled && z>=0 && z<constants::WORLD_HEIGHT) {
     return current->get_light(x, y, z);
   }
-  return 0;
+  return l;
 }
 block_t world::get_voxel(int x, int y, int z) {
   if(z>=(int) constants::WORLD_HEIGHT){
@@ -770,8 +800,9 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
          page->bounds(sx,sy,sz,dim);
          block_t* barray=&page->get(sx,sy,0,valid);
          int N=std::max(x1-x0,y1-y0);
-         std::memset(neighbor_mask,0,513*513*sizeof(bool));
-         
+         int N3=N+4;
+         std::memset(neighbor_mask,0,N3*N3*sizeof(bool));
+         constexpr int N2=3+constants::LIGHT_COMPONENTS;
          uint64_t changed=page->has_changes_in_8x4_block(x0 , y0)[0];
         for(int x=x0; x<=x1; ++x){
             int j=0;
@@ -788,15 +819,15 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
                 int64_t bit_y=(y-sy)%4;
                 uint64_t bit=uint64_t(bit_x*4+bit_y);
                 if(((changed)&(uint64_t(1u)<<bit))!=0){
-                    if(i>=2 && j>=2){
+                    if(i>=1 && j>=1){
                         for(int dx=-1; dx<=1; ++dx){
                             for(int dy=-1; dy<=1; ++dy){
-                                neighbor_mask[(i+dx)*513+j+dy]=true;
+                                neighbor_mask[(i+dx)*N3+j+dy]=true;
                             }
                         }
                     }
                     else{
-                        neighbor_mask[i*513+j]=true;
+                        neighbor_mask[i*N3+j]=true;
                     }
                 }
                 ++j;
@@ -813,9 +844,11 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
                     page->bounds(sx,sy,sz,dim);
                     barray=&page->get(sx,sy,0,valid);
                 }
-                bool dirty=(neighbor_mask[i*513+j]);  
-                
-                std::memset(&(input[((i*512+j)*constants::WORLD_HEIGHT)*4]),0,4*constants::WORLD_HEIGHT);
+                bool dirty=(neighbor_mask[i*N3+j]);  
+                if(!dirty){
+                    continue;
+                }
+                std::memset(&(input[((i*N3+j)*constants::WORLD_HEIGHT)*N2]),0,sizeof(uint8_t)*N2*constants::WORLD_HEIGHT);
                 
                 uint8_t* Lbase=page->get_light(x,y,0);
                    
@@ -826,10 +859,12 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
                 for(int k=0; k<=std::min(z-1,constants::WORLD_HEIGHT-1); k+=std::max((int)skip_invisible_array[k],1)){
                         
                         int blk=std::abs(b2[k]);     
-                        input[((i*512+j)*constants::WORLD_HEIGHT+k)*4+0]=255-(int)Lbase[k];
-                        input[((i*512+j)*constants::WORLD_HEIGHT+k)*4+1]=(block_is_opaque(blk))?255u:0u;
-                        input[((i*512+j)*constants::WORLD_HEIGHT+k)*4+2]=block_emissive_strength(blk);
-                        input[((i*512+j)*constants::WORLD_HEIGHT+k)*4+3]=(b2[k]>0)?1u:0u;   
+                        for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
+                            input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+m]=255-(int)Lbase[k*constants::LIGHT_COMPONENTS+m];
+                        }
+                        input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+constants::LIGHT_COMPONENTS]=(block_is_opaque(blk))?255u:0u;
+                        input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+1+constants::LIGHT_COMPONENTS]=(int)block_emissive_strength(blk);
+                        input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+2+constants::LIGHT_COMPONENTS]=(b2[k]>0)?1u:0u;   
                       
                         if(!blk){   
                             break;
@@ -858,7 +893,7 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
                 uint8_t* Lbase=nullptr;
                 Lbase=page->get_light(x,y,0);
                 int max_delta=0;
-                bool dirty=neighbor_mask[i*513+j];
+                bool dirty=neighbor_mask[i*N3+j];
                 if(!dirty){
                     continue;
                 }
@@ -878,21 +913,21 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
                                     continue;
                                 }
                                 if(!dx && !dy) continue;
-                                uint8_t* ip=&input[((i*512+j+dx*512+dy)*constants::WORLD_HEIGHT+z)*4];
+                                uint8_t* ip=&input[((i*N3+j+dx*N3+dy)*constants::WORLD_HEIGHT+z)*N2];
                                 
                                 for(int dz=1; dz<=std::min(dzmax, constants::WORLD_HEIGHT-z); ++dz){
-                                    if(!ip[dz*4+3]) break;
-                                    if(!ip[dz*4+1]) continue;
+                                    if(!ip[dz*N2+2+constants::LIGHT_COMPONENTS]) break;
+                                    if(!ip[dz*N2+constants::LIGHT_COMPONENTS]) continue;
                                     //rasterize the block bottom face
                                     //using integer pixel coordinates at 32x32 res
-                                    int x0=32*dx/dz;   
-                                    int y0=32*dy/dz;
-                                    int y1=32*dy/dz+32/dz;     
-                                    int x1=32*dx/dz+32/dz;
+                                    int x0=8*dx/dz;   
+                                    int y0=8*dy/dz;
+                                    int y1=8*dy/dz+8/dz;         
+                                    int x1=8*dx/dz+8/dz;    
                                     for(int i2=x0+16; i2<=x1+16; ++i2){
                                         for(int j2=y0+16; j2<=y1+16; ++j2){
                                             if(i2<0 || i2>31 || j2<0 || j2>31){ continue; }
-                                            occ[i2*32+j2]=64/dz;  
+                                            occ[i2*32+j2]=std::max(64+80/dz,occ[i2*32+j2]);  
                                             occ_any=true;
                                         }
                                     }
@@ -905,30 +940,39 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
                 int ao=0;
                 if(!occ_any){
                     
-                    int Lold=Lbase[std::min(z,constants::WORLD_HEIGHT-1)];
-                    max_delta=std::abs(255-(int)Lold);
-                    Lbase[std::min(z,constants::WORLD_HEIGHT-1)]=255u;
-                    Lbase[std::min(z+1,constants::WORLD_HEIGHT-1)]=255u;
+                    for(int m=0; m<constants::LIGHT_COMPONENTS; m+=6){
+                            
+                            int Lold=Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m];
+                            max_delta=std::max(max_delta,std::abs(255-(int)Lold));
+                            Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m]=255u;
+                            
+                            input[((i*N3+j)*constants::WORLD_HEIGHT+z)*N2+m]=0u;
+                        
+                    }   
                     
-                    input[((i*512+j)*constants::WORLD_HEIGHT+z)*4]=0u;
-                    input[((i*512+j)*constants::WORLD_HEIGHT+z+1)*4]=0u;
                 }
                 else{
                     for(int bit=0; bit<1024; ++bit){
-                        ao+=std::max(0,64-occ[bit]);
+                        ao+=std::max(0,64*!occ[bit]);
                     }
                     
-                    ao=std::min((ao*255)/(1024*64),255);
-                    int Lold=Lbase[std::min(z,constants::WORLD_HEIGHT-1)];
-                    max_delta=std::abs((int)ao-(int)Lold);
-                    Lbase[std::min(z,constants::WORLD_HEIGHT-1)]=ao;    
-                    Lbase[std::min(z+1,constants::WORLD_HEIGHT-1)]=ao;
-                    input[((i*512+j)*constants::WORLD_HEIGHT+z)*4]=255-(int)ao;
-                    input[((i*512+j)*constants::WORLD_HEIGHT+z+1)*4]=255-(int)ao;
-                }
-                for(int k=0; k<=constants::WORLD_HEIGHT-1; k+=std::max((int)skip_invisible_array[k],1)){
-                            float L1=0;
+                    ao=std::min((ao*255)/(1024*128),255);
+                    //if(ao) std::cerr<<ao<<" ";  
+                    for(int m=0; m<constants::LIGHT_COMPONENTS; m+=6){
                             
+                            int Lold=Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m];
+                            max_delta=std::max(max_delta,std::abs((int)ao-(int)Lold));
+                            Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m]=ao;
+                            input[((i*N3+j)*constants::WORLD_HEIGHT+z)*N2+m]=255-ao;
+                        
+                    }
+                }
+                for(int k=0; k<=std::min(z+1,constants::WORLD_HEIGHT-1); k+=std::max((int)skip_invisible_array[k],1)){
+                            float L1[constants::LIGHT_COMPONENTS];
+                            
+                            for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
+                                L1[m]=0.0;
+                            }
                             if(b2[k]<0){
                                 continue;
                             }   
@@ -938,25 +982,33 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
                             for(int dx=-1; dx<=1; ++dx){
                                 for(int dy=-1; dy<=1; ++dy){
                                     for(int dz=-1; dz<=1; ++dz){
+                                        
                                         if(!dx && !dy && !dz){
                                             continue;
                                         }
                                         if(k+dz<0 || k+dz>=constants::WORLD_HEIGHT){
                                             continue;
                                         }
-                                        int ix2=((i+dx)*512+j+dy)*constants::WORLD_HEIGHT+k+dz;
-                                        if(input[ix2*4+1]){
+                                        int ix2=((i+dx)*N3+j+dy)*constants::WORLD_HEIGHT+k+dz;
+                                        if(input[ix2*N2+constants::LIGHT_COMPONENTS]){
                                             continue;
                                         }
-                                        L1+=(float)(255-input[ix2*4])/255.0*0.00018+(int)input[ix2*4+2]/255.0;
+                                        for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
+                                            float component_dot=constants::LPV_WEIGHT[(m%6)*27+((dx+1)*3+dy+1)*3+dz+1];
+                                            L1[m]+=(float)(255-input[ix2*N2+m])/255.0*0.00001*float(component_dot>=1)+(float)input[ix2*N2+1+constants::LIGHT_COMPONENTS]/255.0;
+                                        }
                                     }
                                 }
                             }
-                            int Lold=(int)Lbase[k];
-                            int Lnew=std::min(float(Lold)+(L1*255.0),255.0);
-                            Lbase[k]=(uint8_t) Lnew;
-                            int delta=(int)Lnew-(int)Lold;
-                            max_delta=std::max(std::abs(delta),max_delta);
+                            
+                            for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
+                                int Lold=(int)Lbase[k*constants::LIGHT_COMPONENTS+m];
+                                int Lnew=std::min(float(Lold)+(L1[m]*255.0),255.0);
+                                Lbase[k*constants::LIGHT_COMPONENTS+m]=(uint8_t) Lnew;
+                                int delta=(int)Lnew-(int)Lold;
+                                max_delta=std::max(std::abs(delta),max_delta);
+                            }
+                            
                             if(!b2[k]){
                                 break;
                             }
@@ -964,11 +1016,11 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
                 
                  int bit=((x-x0)%8)*4+(y-y0)%4;
                  
-                if(max_delta<16){   
+                if(max_delta<16){     
                  page->has_changes_in_8x4_block(x , y)[0] ^=  ((uint64_t(1u)<<uint64_t(bit)));
                 }   
                 else{
-                  page->has_changes_in_8x4_block(x , y)[0] |= uint64_t(1u)<<uint64_t(32u) | ((uint64_t(1u)<<uint64_t(bit)));
+                  page->has_changes_in_8x4_block(x , y)[0] |= uint64_t(1u)<<uint64_t(32u);
                 }
                 
                 j+=1;

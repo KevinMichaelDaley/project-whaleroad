@@ -9,5 +9,7 @@ constexpr const  int MAX_DATAGRAM_SIZE =
 constexpr const  int CHUNK_WIDTH = 16;
 constexpr const  int MAX_RESIDENT_PAGES=600;
 constexpr const  int PAGE_DIM=128;
-constexpr const  int LIGHT_COMPONENTS=1;
+constexpr const  int LIGHT_COMPONENTS=6;
+constexpr const  float LPV_WEIGHT[]={
+    -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -2, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0, -1, 1, 0, -1, 1, 0, -1, 1, 0, -2, 1, 0, -1, 1, 0, -1, 1, 0, -1, 1, 0, -1, -1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -2, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, -1, -1, -1, 1, 1, 1, 0, 0, 0, -1, -2, -1, 1, 1, 1, 0, 0, 0, -1, -1, -1, -1, -1, -1, -1, -2, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, -1, -1, -1, -2, -1, -1, -1, -1};
 } // namespace constants

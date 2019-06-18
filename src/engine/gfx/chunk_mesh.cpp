@@ -4,7 +4,7 @@
 #include <cstring>
 #include <mutex>
 bool chunk_mesh::gen_instance(int x, int y, int z, block_t b,
-                              unsigned int *Lf) {
+                              int *Lf) {
 
   chunk_mesh::BVertex v = {0};
   uint32_t x2 = (unsigned int)(x);
@@ -12,12 +12,25 @@ bool chunk_mesh::gen_instance(int x, int y, int z, block_t b,
   uint32_t z2 = (unsigned int)(z);
   uint8_t xydiff = x2 * 16 + y2;
   uint32_t which = (unsigned int)std::abs(b);
-  unsigned char L1=(uint8_t)Lf[0]/16uL;
-  unsigned char L2=(uint8_t)Lf[1]/16uL;
-  unsigned char L3=(uint8_t)Lf[2]/16uL;
-  unsigned char L4=(uint8_t)Lf[3]/16uL;
-  unsigned char L5=(uint8_t)Lf[4]/16uL;
-  unsigned char L6=(uint8_t)Lf[5]/16uL;
+  unsigned char L1=(uint8_t)Lf[0];
+  unsigned char L2=(uint8_t)Lf[1];
+  unsigned char L3=(uint8_t)Lf[2];
+  unsigned char L4=(uint8_t)Lf[3];
+  unsigned char L5=(uint8_t)Lf[4];
+  unsigned char L6=(uint8_t)Lf[5];
+  unsigned char L7=(uint8_t)Lf[6];
+  unsigned char L8=(uint8_t)Lf[7];
+  unsigned char L9=(uint8_t)Lf[8];
+  unsigned char L10=(uint8_t)Lf[9];
+  unsigned char L11=(uint8_t)Lf[10];
+  unsigned char L12=(uint8_t)Lf[11];
+  
+  unsigned char L13=(uint8_t)Lf[12];
+  unsigned char L14=(uint8_t)Lf[13];
+  unsigned char L15=(uint8_t)Lf[14];
+  unsigned char L16=(uint8_t)Lf[15];
+  unsigned char L17=(uint8_t)Lf[16];
+  unsigned char L18=(uint8_t)Lf[17];
   uint32_t L1u = uint32_t(z2%65536) +
                 (uint32_t(xydiff) << 16uL) + (uint32_t(which%256) << 24uL);
   uint32_t L2u = uint64_t(which/256) + (uint64_t(L1+(L2<<4uL)+(L3<<8uL)+(L4<<12uL)+(L5<<16uL)+(L6<<20uL))<<8uL);
@@ -41,38 +54,45 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
     if (!block_is_visible(b2)) {
       continue;
     }
-    unsigned int L[6]={0xffffffff};
-    int Ltop=0;
-    int Lup=0;
-    int Ldown=0;
-    for(int i=0; i<6; ++i){
+    int L[std::max(1,constants::LIGHT_COMPONENTS)]={0x0};
+    for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
         
-        int dx= FacesNormal[i][0];
-        int dy= FacesNormal[i][1];
-        int dz= FacesNormal[i][2];
-        int Lnew=wld->get_light(x+x0+dx,y+y0+dy,z+dz)[0];
-        if(i==0){
-            Ldown=Lnew;
+        int dx=-FacesNormal[m%6][0];
+        int dy=-FacesNormal[m%6][1];
+        int dz=-FacesNormal[m%6][2];
+        if(z+dz<0 || z+dz>constants::WORLD_HEIGHT-1){
+            L[m]=255;
         }
-        else{
-            if(i==1){
-                Lup=Lnew;
+        block_t b2=wld->get_voxel(x+x0+dx,y+y0+dy,z+dz);
+        if(b2>1){
+            continue;
+        }
+        if(b2<0){
+            continue;
+        }
+        uint8_t* L1=wld->get_light(x+x0+dx,y+y0+dy,z+dz);
+        L[m]=L1[m];
+        for(int n=0; n<constants::LIGHT_COMPONENTS; ++n){
+            
+            int dx2=FacesNormal[n%6][0];
+            int dy2=FacesNormal[n%6][1];
+            int dz2=FacesNormal[n%6][2];
+            int ix2=((dx2+1)*3+(dy2+1))*3+dz2+1;
+            
+            if(constants::LPV_WEIGHT[m*27+ix2]<0){
+                L[m]=std::max((int)L[m],(int)L1[n]); 
             }
-            Ltop=std::max(Ltop,Lnew);
         }
+    }   
+    int Ltop=0;
+    for(int m=1; m<constants::LIGHT_COMPONENTS; ++m){
+        Ltop=std::max((int)L[m],Ltop);
     }
-    for(int i=0; i<6; ++i){
-        
-        int dx= FacesNormal[i][0];
-        int dy= FacesNormal[i][1];
-        int dz= FacesNormal[i][2];
-        if(z+dz>0){
-            L[i]=std::max(Ltop*(dz>=0),(Lup*(dz>=0)+Ldown*(dz<=0))/(dz<=0+dz>=0));
-        }
-        else{
-            L[i]=0u;
-        }
+    for(int m=1; m<constants::LIGHT_COMPONENTS; ++m){
+        L[m]=std::min(255,std::max((int)L[m],Ltop));
     }
+    
+    
     gen_instance((x), (y), (z), b2, L);
   }
 }
@@ -176,7 +196,6 @@ void chunk_mesh::copy_to_gpu() {
                          GL::BufferUsage::DynamicDraw);
     vbo_sz = 256 * 256 * sizeof(BVertex);
   } else {
-
     vertexBuffer.setSubData(
         0, {(const void *)&verts[0], 256 * 256 * sizeof(BVertex)});
   }

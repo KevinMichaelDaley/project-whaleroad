@@ -97,6 +97,7 @@ public:
         scene_=s;
         fwd.texture("atlas", *atlas_);
         fwd.uniform("sun_color", Vector3(1,1,1));
+        fwd.uniform("fog_color",Vector3{0.8,0.69,0.7});
         return *this;
     }
     block_default_forward_pass& set_player(player* p){

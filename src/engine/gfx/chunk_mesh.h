@@ -85,7 +85,7 @@ public:
   void update(world* w);
   void gen(world* w);
   void gen_column(int x, int y, world* w);
-  bool gen_instance(int x, int y, int z, block_t b, unsigned int *Lf);
+  bool gen_instance(int x, int y, int z, block_t b, int *Lf);
   void copy_back();
   void start_at(int x, int y);
   chunk_mesh();

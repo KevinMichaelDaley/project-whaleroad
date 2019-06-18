@@ -41,7 +41,9 @@ public:
   void spawn() { spawned = true; }
   void despawn() { spawned = false; }
   bool is_in_world() { return spawned; }
+#ifndef __ANDROID__
   typedef Magnum::Platform::Sdl2Application::KeyEvent::Key keycode_t;
+
   void keydown(keycode_t k) {
     if (k == keycode_t::Space) {
       jump_down = true;
@@ -84,6 +86,7 @@ public:
       d_down = false;
     }
   }
+#endif
   void mousemove(int x, int y) {
     look_x += x * sensitivity;
     look_y += y * sensitivity;

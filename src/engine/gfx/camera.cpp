@@ -24,7 +24,7 @@ void camera::set_perspective(float new_fov, float new_aspect,
   far_clip = new_far_clip;
   near_clip = new_near_clip;
   aspect = new_aspect;
-  Magnum::Math::Rad<float> fovr{fov*M_PI/180.0f};
+  Magnum::Math::Rad<float> fovr{(float)(fov*M_PI/180.0f)};
   projection = Matrix4::perspectiveProjection(fovr, aspect, near_clip, far_clip);
 }
 void camera::set_ortho(Vector2 new_scale, float new_near_clip, float new_far_clip) {

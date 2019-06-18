@@ -1,5 +1,4 @@
 #pragma once
-
 #include "camera.h"
 #include "drawable.h"
 #include "vox/block.h"

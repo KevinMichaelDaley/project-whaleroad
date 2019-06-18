@@ -1,4 +1,3 @@
-
 #include "common/timer.h"
 #include "gfx/shader.h"
 #include "gfx/chunk_mesh.h"
@@ -17,7 +16,7 @@
 #include <Magnum/Math/Matrix3.h>
 #include <Magnum/MeshTools/CompressIndices.h>
 #include <Magnum/MeshTools/Interleave.h>
-#include <Magnum/Platform/Sdl2Application.h>
+
 #include <Magnum/Primitives/Cube.h>
 #include <Magnum/Shaders/Phong.h>
 #include <Magnum/Trade/AbstractImageConverter.h>
@@ -27,12 +26,25 @@
 #include "Magnum/GL/RenderbufferFormat.h"
 #include "Magnum/ImageView.h"
 #include <Corrade/Utility/Resource.h>
+
+#include <Corrade/Utility/Debug.h>
 #include <chrono>   
 
+#ifndef __ANDROID__
+
+#include <Magnum/Platform/Sdl2Application.h>
+#else
+
+#include <Magnum/Platform/AndroidApplication.h>
+#endif
 using namespace Magnum;
 
-
+#ifndef __ANDROID__
 class game : public Platform::Sdl2Application {
+#else
+#define TOUCH_CONTROLS 1
+class game : public Platform::AndroidApplication {
+#endif
 private:
   block_default_forward_pass* block_pass;
   world_view *wv_;
@@ -41,8 +53,12 @@ private:
   std::string player_name;
   GL::Texture2D atlas;
   char** argv; int argc;
+  double touch_time;
+  bool touch;
+  int pos_x, pos_y;
 public:
   explicit game(const Arguments &arguments)
+    #ifndef __ANDROID__
       :  Platform::Sdl2Application(
                                   arguments,
                                   Configuration{}.setWindowFlags(Magnum::Platform::Sdl2Application::Configuration::WindowFlag::Fullscreen | Magnum::Platform::Sdl2Application::Configuration::WindowFlag::MouseLocked).setSize({2560,1080})
@@ -52,9 +68,21 @@ public:
       {
     setSwapInterval(0);
     setMouseLocked(true);   
+#else
+    :  Platform::AndroidApplication(
+                                  arguments
+                                  
+                                  ) 
+      {
+#endif  
+    touch=false;
+    touch_time=0.0;
     PluginManager::Manager<Trade::AbstractImporter> manager;
-
+#ifndef __ANDROID__
     player_name = arguments.argc > 1 ? arguments.argv[1] : "new_player";
+#else
+    player_name = "new_player";
+#endif
     std::unique_ptr<Trade::AbstractImporter> importer =
         manager.loadAndInstantiate("TgaImporter");  
     if(!importer) std::exit(1);
@@ -123,32 +151,40 @@ public:
     wv_->get_world()->save_all();
     delete wv_->get_world();
     delete wv_;
-    exit();
+    std::terminate();
   }
   void die() {
-    printf("you died.\n");
+    Debug{}<<"you died.\n";
     quit();
   }
 
 private:
-  void tickEvent() override {
+  void tickEvent() 
+#ifndef __ANDROID__
+    override {
+#else
+    {
+#endif
   /*  if (!player0->is_alive()) {
       die();
     }*/
-  
+    if(touch){
+        touch_time+=timer::step();
+    }
     scene_.update(timer::step());
-    if(rand()%4==0){
-        std::cerr<<timer::step()<<" ";
+    if(rand()%10==0){
+        Debug{}<<timer::step()<<Utility::Debug::newline;
     }
     track_player();
-    wv_->update_occlusion(96);
     wv_->queue_update_stale_meshes();
     wv_->remesh_from_queue();
     redraw();
     timer::next();
-  }
-  
-  void drawEvent() override {
+  } 
+  virtual void drawEvent() override {
+#ifdef __ANDROID__
+      tickEvent();
+#endif
     GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
     GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
     GL::defaultFramebuffer.clear(GL::FramebufferClear::Color | GL::FramebufferClear::Depth);
@@ -157,23 +193,61 @@ private:
     return;
   }
   void mouseMoveEvent(MouseMoveEvent &event) override {
+#ifndef TOUCH_CONTROLS
     scene_.get_player(0)->mousemove(event.relativePosition().x(),
                                      event.relativePosition().y());
+#else
+    
+    if(event.position().x()>windowSize().x()/2){
+        scene_.get_player(0)->mousemove(event.position().x()-pos_x,
+                                     event.position().y()-pos_y);
+    }
+    else{
+        scene_.get_player(0)->strafe(event.position().x()-pos_x<0, (event.position().x()-pos_y*0.01));
+        scene_.get_player(0)->pedal((event.position().y()-pos_y<0), (event.position().y()-pos_y*0.01));
+        
+    }
+    pos_y=event.position().x(); 
+    pos_x=event.position().y();
+    touch_time=0.0;
+#endif
   }
 
+
   void mouseReleaseEvent(MouseEvent &event) override {
+      
+#ifndef TOUCH_CONTROLS
     scene_.get_player(0)->mouseup(
         event.button() == MouseEvent::Button::Left
             ? 0
             : event.button() == MouseEvent::Button::Right ? 1 : 2);
+#else
+    touch=false;
+    if(touch_time){
+        
+        scene_.get_player(0)->mousedown(touch_time<0.9? 0
+                            :  1);
+        touch_time=0.0;
+    }
+#endif
+    
   }
   void mousePressEvent(MouseEvent &event) override {
     player *player0 = scene_.get_player(0);
+#ifndef TOUCH_CONTROLS
+    
+    pos_y=event.position().x();
+    pos_x=event.position().y();
     player0->mousedown(event.button() == MouseEvent::Button::Left
                            ? 0
                            : event.button() == MouseEvent::Button::Right ? 1
                                                                          : 2);
+#else
+    touch=true;
+#endif
+    
   }
+#ifndef TOUCH_CONTROLS
   void keyPressEvent(KeyEvent &event) override {
     player *player0 = scene_.get_player(0);
     if (event.key() == KeyEvent::Key::Esc) {
@@ -185,5 +259,11 @@ private:
     player *player0 = scene_.get_player(0);
     player0->keyup(event.key());
   }
+#endif
+
 };
+#ifndef __ANDROID__
 MAGNUM_APPLICATION_MAIN(game)
+#else
+MAGNUM_ANDROIDAPPLICATION_MAIN(game)
+#endif

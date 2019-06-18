@@ -3,7 +3,9 @@
 #include "vox/world.h"
 #include <Magnum/Math/Quaternion.h>
 #include <Magnum/Math/Vector3.h>
+#ifndef __ANDROID__
 #include <Magnum/Platform/Sdl2Application.h>
+#endif
 #include <algorithm>
 #include <array>
 #define _USE_MATH_DEFINES
@@ -93,7 +95,7 @@ public:
     up_vector[2] = 1;
     climb_speed = 0.25f;
     fall_damage = 1.0f;
-    gravity_multiplier = 0.9f;
+    gravity_multiplier = 0.2f;
     fall_start = now();
     jump_start = now();
     jump_ = false;
@@ -328,7 +330,7 @@ public:
             for (int l = 0; l < 4; ++l) {
               for (int m = 0; m < 4; ++m) {
                 for (int n = 0; n < 4; ++n) {
-                  float x2[3] = {i + l / 4.0, j + m / 4.0, k + n / 4.0};
+                  float x2[3] = {i + l / 4.0f, j + m / 4.0f, k + n / 4.0f};
                   int ix = (ii * 4 + l) * Ny * Nz * 4 * 4 +
                            (jj * 4 + m) * Nz * 4 + kk * 4 + n;
                   // d[ix]=std::max(-std::abs(signed_distance_to(x2)), d[ix]);
@@ -342,7 +344,7 @@ public:
               if (b > WATER && t2 <= 10) {
                 stop_moving = true;
               }
-              float pos[3] = {i, j, k};
+              float pos[3] = {(float)i, (float)j, (float)k};
               on_water = on_water || (b == WATER && t2 == 1);
 
               if (on_water && !on_land && t2 == 1 && b == WATER) {

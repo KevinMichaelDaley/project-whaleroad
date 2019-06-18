@@ -29,8 +29,8 @@ void block_iterator::iter_columns(world *wld, Magnum::Range3Di bounds, block_ite
           continue;
       }
             
-        uint16_t neighborhood[( size_neighborhood+8)*( size_neighborhood+4)*(int)constants::WORLD_HEIGHT]={0};
-        uint16_t z_neighbors[( size_neighborhood+8)*( size_neighborhood+4)]={0};
+        uint16_t neighborhood[( size_neighborhood+8)*( size_neighborhood+4)*(int)constants::WORLD_HEIGHT];
+        uint16_t z_neighbors[( size_neighborhood+8)*( size_neighborhood+4)];
       // build the union of the neighborhoods of every column in the 8x4
       // subchunk
             if(size_neighborhood>1){

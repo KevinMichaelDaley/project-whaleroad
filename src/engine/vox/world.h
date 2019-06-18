@@ -116,8 +116,8 @@ private:
         bool* neighbor_mask;
 public:
   world *get_world() ;
-  world_view(world* w, Vector3 center0, int rad): center{center0.x()/constants::CHUNK_WIDTH, center0.y()/constants::CHUNK_WIDTH, center0.z()},
-                                                    center_old{center0.x()/constants::CHUNK_WIDTH, center0.y()/constants::CHUNK_WIDTH, center0.z()}, 
+  world_view(world* w, Vector3 center0, int rad): center{(int)(center0.x()/constants::CHUNK_WIDTH), (int)(center0.y()/constants::CHUNK_WIDTH), (int)center0.z()},
+                                                    center_old{(int)(center0.x()/constants::CHUNK_WIDTH), (int)(center0.y()/constants::CHUNK_WIDTH), (int)center0.z()}, 
                                                     wld{w},
                                                     radius{rad},
                                                     mesh_update_head{0},
@@ -133,6 +133,7 @@ public:
                                     }
   void update_center(Vector3 player_position) ;
   void update_occlusion(int subradius) ;
+  void update_occlusion(int x0, int x1, int y0, int y1) ;
 
   int nearest_multiple(int x, int base) ;
   void update_visible_list(

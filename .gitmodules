@@ -1,3 +1,6 @@
 [submodule "src/extern/concurrentqueue"]
 	path = src/extern/concurrentqueue
 	url = https://github.com/moodycamel/concurrentqueue.git
+[submodule "src/toolchains"]
+	path = src/toolchains
+	url = https://github.com/mosra/toolchains

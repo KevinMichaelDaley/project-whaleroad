@@ -33,18 +33,40 @@ cmake_minimum_required(VERSION 3.1)
 project(islands)
 
 # Add module path in case this is project root
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/modules/")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/modules/" "${PROJECT_SOURCE_DIR}/toolchains/modules/")
+if(CORRADE_TARGET_ANDROID AND CMAKE_ANDROID_NDK)
+    list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/toolchains/modules/")
+    include(UseAndroid)
+endif()
+if(NOT CORRADE_TARGET_ANDROID)
 find_package(SDL2 REQUIRED)
 find_package(JeMalloc REQUIRED)
-find_package(Magnum REQUIRED GL Trade Sdl2Application)
+find_package(Magnum REQUIRED GL Trade Sdl2Application TgaImporter)
+else()
+	find_package(Magnum REQUIRED GL Trade AndroidApplication TgaImporter)
+endif()
 find_package(Corrade REQUIRED Utility)
 set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
+if(NOT CORRADE_TARGET_ANDROID)
 include_directories(${PROJECT_SOURCE_DIR}/engine ${JEMALLOC_INCLUDE_DIR})
-FILE(GLOB SOURCE_FILES engine/*/*.cpp main.cpp)
+else()
+include_directories(${PROJECT_SOURCE_DIR}/engine)
+endif()
+FILE(GLOB SOURCE_FILES engine/*/*.cpp main/main.cpp)
 corrade_add_resource(Resources resources.conf)
-add_executable(islands ${SOURCE_FILES} ${Resources})
-target_link_libraries(islands
-    Magnum::Application
-    Magnum::GL  
-    Magnum::Magnum
-    Magnum::Trade pthread Corrade::Utility ${JEMALLOC_LIBRARIES})
+if(NOT CORRADE_TARGET_ANDROID)
+	add_executable(islands ${SOURCE_FILES} ${Resources})
+	target_link_libraries(islands
+			    Magnum::Application
+			    Magnum::GL  
+			    Magnum::Magnum
+			    Magnum::Trade pthread Corrade::Utility ${JEMALLOC_LIBRARIES})
+else()
+	add_library(islands SHARED ${SOURCE_FILES} ${Resources})
+	target_link_libraries(islands
+			    Magnum::Application
+			    Magnum::GL  
+			    Magnum::Magnum
+			    Magnum::Trade Corrade::Utility Magnum::TgaImporter)
+        android_create_apk(islands main/AndroidManifest.xml)
+endif()

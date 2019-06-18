@@ -13,14 +13,6 @@
 #include <Magnum/GL/Context.h>
 #include <Magnum/GL/Shader.h>
 #include <Magnum/GL/Texture.h>
-#include <Magnum/GL/TextureFormat.h>
-#include <Magnum/GL/ImageFormat.h>
-#include <Magnum/GL/Version.h>
-#include <Magnum/GL/PixelFormat.h>
-#include <Magnum/Math/Color.h>
-#include <Magnum/ImageView.h>
-#include <Magnum/Image.h>
-#include <Magnum/PixelStorage.h>
 class world_page;
 class world;
 

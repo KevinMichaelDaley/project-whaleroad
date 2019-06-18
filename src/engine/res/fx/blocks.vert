@@ -13,7 +13,7 @@
 			out vec2 coord;
 			out float z;
 			uniform mat4x4 projection, view;
-			uniform vec3 sun_color=vec3(1.0,1.0,1.0);
+			uniform vec3 sun_color;
 			
             void main(){
                 

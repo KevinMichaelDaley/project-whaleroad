@@ -30,16 +30,21 @@ using namespace Magnum;
 class shader : public GL::AbstractShaderProgram {
 public:
   shader(std::string shader_name) {
-
+#ifndef __ANDROID__
     GL::Shader vert{GL::Version::GL330, GL::Shader::Type::Vertex};
     GL::Shader frag{GL::Version::GL330, GL::Shader::Type::Fragment};
-
-    std::string src_vert = read_text_file(shader_name + ".vert");
-    std::string src_frag = read_text_file(shader_name + ".frag");
-    vert.addSource(src_vert);
-    frag.addSource(src_frag);
+#else
+    
+    GL::Shader vert{GL::Version::GLES300, GL::Shader::Type::Vertex};
+    GL::Shader frag{GL::Version::GLES300, GL::Shader::Type::Fragment};
+#endif
+    
+    const Utility::Resource rs{"art"};
+    vert.addSource(rs.get(shader_name + ".vert"));
 
     CORRADE_INTERNAL_ASSERT_OUTPUT(vert.compile());
+    
+    frag.addSource(rs.get(shader_name + ".frag"));
     CORRADE_INTERNAL_ASSERT_OUTPUT(frag.compile());
 
     attachShader(vert);
@@ -83,7 +88,7 @@ class block_default_forward_pass{
     GL::Texture2D* atlas_;
 public:
     block_default_forward_pass(GL::Texture2D& atlas):
-        fwd{"../../src/engine/res/fx/blocks"}{
+        fwd{"blocks"}{
             atlas_=&atlas;
             fwd.texture("atlas", *atlas_);
             fwd.uniform("sun_color", Vector3(1,1,1));

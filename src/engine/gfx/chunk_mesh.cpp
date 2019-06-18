@@ -32,7 +32,7 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
   bool valid = false;
   block_t &b = wld->get_voxel(x + x0, y + y0, 0, valid);
   
-  for (int z = 0; z <= (int) std::min(unsigned(zmax+1), unsigned(constants::WORLD_HEIGHT-1));
+  for (int z = 0; z <= (int) std::min(unsigned(zmax), unsigned(constants::WORLD_HEIGHT-1));
        z += std::max(int(skip_invisible_array[z]), 1)) {
     block_t b2 = (&b)[z];
 
@@ -43,26 +43,31 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
     }
     unsigned int L[6]={0xffffffff};
     int Ltop=0;
+    int Lup=0;
+    int Ldown=0;
     for(int i=0; i<6; ++i){
+        
         int dx= FacesNormal[i][0];
         int dy= FacesNormal[i][1];
         int dz= FacesNormal[i][2];
-        
-        if(z+dz>=constants::WORLD_HEIGHT){
-            Ltop+=255;
+        int Lnew=wld->get_light(x+x0+dx,y+y0+dy,z+dz)[0];
+        if(i==0){
+            Ldown=Lnew;
         }
-        else if(dz>=0){
-            Ltop+=wld->get_light(dx+x+x0,dy+y+y0,z+dz)[0];
+        else{
+            if(i==1){
+                Lup=Lnew;
+            }
+            Ltop=std::max(Ltop,Lnew);
         }
     }
     for(int i=0; i<6; ++i){
         
+        int dx= FacesNormal[i][0];
+        int dy= FacesNormal[i][1];
         int dz= FacesNormal[i][2];
-        if(dz>=0){
-            L[i]=Ltop/5;
-        }
-        else if(z+dz>0){
-            L[i]=wld->get_light(x+x0,y+y0,z-dz)[0];
+        if(z+dz>0){
+            L[i]=std::max(Ltop*(dz>=0),(Lup*(dz>=0)+Ldown*(dz<=0))/(dz<=0+dz>=0));
         }
         else{
             L[i]=0u;

@@ -1096,6 +1096,8 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
           (cx * constants::CHUNK_WIDTH - radius) + (center[0]*constants::CHUNK_WIDTH),
           (cy * constants::CHUNK_WIDTH - radius) + (center[1]*constants::CHUNK_WIDTH));
       reuse[j]->force_change();
+      
+          update_occlusion(reuse[j]->x0-1,reuse[j]->x0+16, reuse[j]->y0-1,reuse[j]->y0+16);
       reuse[j]->update(wld);
       ++j;
     }

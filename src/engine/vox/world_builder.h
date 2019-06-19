@@ -40,74 +40,70 @@ class worldgen_stream: public stream{
     std::string method;
     stream_mode mode;
     void* so;
-    uint64_t ij, xz;
+    uint64_t ij, x0, y0;
     int16_t k;
 public:
-    typedef block_t (*generator)(int, int, block_t*, int*);
+    typedef block_t (*generator)(int, int, int,     block_t*, int*);
 private:
     generator generate;
-    float height[8388608];
+    float height[(constants::PAGE_DIM+20)*(constants::PAGE_DIM+20)];
+    int voronoi_x[1024];
 public:
-    uint64_t zadd(uint64_t z, uint64_t w)
-    {
-        uint64_t xsum = (z | 0xAAAAAAAAAAAAAAAA) + (w & 0x5555555555555555);
-        uint64_t ysum = (z | 0x5555555555555555) + (w & 0xAAAAAAAAAAAAAAAA);
-        return (xsum & 0x5555555555555555) | (ysum & 0xAAAAAAAAAAAAAAAA);
-    }
-    uint64_t zsub(uint64_t z, uint64_t w)
-    {
-        uint64_t xdiff = (z & 0x5555555555555555) - (w & 0x5555555555555555);
-        uint64_t ydiff = (z & 0xAAAAAAAAAAAAAAAA) - (w & 0xAAAAAAAAAAAAAAAA);
-        return (xdiff & 0x5555555555555555) | (ydiff & 0xAAAAAAAAAAAAAAAA);
-    }
 
-    float gen_height(uint64_t xyc, int r=50){
-        int xy=xyc%8388608;
+    float gen_height(int x, int y, int r=50){
+        
         if(r==0){
-                int x=0;
-                int y=0;
-                for(int i=0; i<32; ++i){
-                    x|=(xyc>>i)&(1<<i);
-                    y|=(xyc>>(i+1))&(1<<i);
-                }
-                srand(x/18+(y/18)*100000);
-                return (rand()%1000)/1000.0;
-        }   
+            float hmin=100000;
+            for(int i=0; i<20; ++i){
+                int x2=(voronoi_x[i]%(155*155))%155+1024;
+                int y2=(voronoi_x[i]%(155*155))/155+1024;
+                hmin=std::min(hmin,(float) ((x2-x)*(x2-x)+(y2-y)*(y2-y))/(355.0f*355.0f));
+            }   
+            return 0.4-std::min(0.3f,hmin);
+        }       
         else{
-            float havg=height[xy];
-            float hdiff=0.0, hdiff2=0.0;
-            for(int i=1; i<17; ++i){
-                hdiff=std::max(hdiff,std::max(height[zadd(xy,i)%8388608]-havg,0.0f));
-                hdiff2=std::min(hdiff,std::min(height[zadd(xy,i)%8388608]-havg,0.0f));
-                hdiff=std::max(hdiff,std::max(height[zsub(xy,i)%8388608]-havg,0.0f));
-                hdiff2=std::min(hdiff2,std::min(height[zsub(xy,i)%8388608]-havg,0.0f));
+            float havg=height[(x-x0+10)*(constants::PAGE_DIM+20)+y-y0+10];
+            float hdiff=0.0;
+            int ix1=(x+10-x0)*(constants::PAGE_DIM+20)+y+10-y0;
+            for(int i=-1; i<=1; ++i){
+                
+                if(x-x0+i<-10 || x-x0+i >= constants::PAGE_DIM+10) continue;
+                for(int j=-1; j<=1; ++j){
+                    if(!i && !j) continue;
+                    if(y-y0+j<-10 || y-y0+j >= constants::PAGE_DIM+10) continue;
+                    int ix2=(i)*(constants::PAGE_DIM+20)+j;
+                    hdiff+=height[ix1+ix2]-height[ix1];
+                }
             }
-            return havg+(hdiff+hdiff2)*0.25f;
-        }
+            return havg+(hdiff)/20.0;
+        } 
+       
     }
-    void get_generated_run(uint64_t xy, int z, block_t* b, int* n){
+    void get_generated_run(int x, int y, int z, block_t* b, int* n){
         if(method.compare("default")==0){
-            if(z<(int)(height[xy%8388608]*300.0)-1){
-                b[0]=STONE; n[0]=(int)(height[xy%8388608]*300.0)-1-z;
+            if(z<(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*300.0)-1){
+                b[0]=STONE; n[0]=(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*300.0)-1-z;
                 bool neg=true;
-                for(int i=0; i<4; ++i){ 
-                    if(int(height[zadd(xy,i)%8388608]*300.0)<z){
+                for(int i=-1; i<=1; ++i){ 
+                    for(int j=-1; j<=1; ++j){ 
+                    if(int(height[(x+10+i)*(constants::PAGE_DIM+20)+y+10+j]*300.0)<z+1){
                         neg=false;
                     }
-                    if(int(height[zsub(xy,i)%8388608]*300.0)<z){
+                    if(int(height[(x+10+i)*(constants::PAGE_DIM+20)+y+10+j]*300.0)<z+1){
                         neg=false;
                      }
+                    }
                 }
                 if(neg){
                     b[0]=-STONE;
                 }
             }
-            else if(z<(int)(height[xy%8388608]*300.0)){
+            else if(z<(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*300.0)){
                 
                 b[0]=STONE; n[0]=1;
             }
                 
-            else if(z==(int)(height[xy%8388608]*300.0)){
+            else if(z==(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*300.0)){
                 b[0]=GRASS; n[0]=1;
             }
             else{
@@ -118,22 +114,32 @@ public:
         }
         else{
         if(generate==nullptr){ b[0]=0; n[0]=constants::WORLD_HEIGHT-z; return;}
-        generate(xy,z,b,n);
+        generate(x,y,z,b,n);
         }
     }
     worldgen_stream(std::string m, stream_mode md, int ox, int oy, int oz){
-        
+        srand(0);
+        for(int i=0; i<1024; ++i){
+            voronoi_x[i]=rand();
+        }
         method=m;
         mode=md;
         so=nullptr;
         ij=0;
-        xz=0;
-        for(unsigned i=0; i<32; ++i){
-            xz+=((uint64_t)((ox>>i)&1u))<<(uint64_t)(2u*i);
-            xz+=((uint64_t)((oy>>i)&1u))<<(uint64_t)(2u*i+1u);
-        }
+        x0=ox;
+        y0=oy;
         k=0;
         generate=nullptr;
+        
+                for(int t=0; t<3; ++t){
+        for(int i=-10; i<constants::PAGE_DIM+10; ++i){
+            
+            for(int j=-10; j<constants::PAGE_DIM+10; ++j){
+                    height[(i+10)*(constants::PAGE_DIM+20)+j+10]=gen_height(i+(int)x0,j+(int)y0,t);
+             
+            }
+        }   
+                }
         if(method.compare("default")){
             so=dlopen(("../../src/engine/proc/terrain/gen_"+method+".so").c_str(), RTLD_NOW);
             generate=(generator) dlsym(so, "generate_run");
@@ -144,24 +150,15 @@ public:
         for(size_t off=0; off<size/sizeof(block_t); off+=2u){
             block_t b; int n;
             
-            for(int t=0; t<10; ++t){
-                height[ij%8388608]=gen_height(ij,t);
-            }
-             height[ij%8388608]=std::min(0.8,std::max(0.01,height[ij%8388608]+0.5))/4.0;
+            
             int xz=0;
-            get_generated_run(ij, k, &b, &n);
+            get_generated_run(ij/constants::PAGE_DIM,ij%constants::PAGE_DIM, k, &b, &n);
             n=std::min(constants::WORLD_HEIGHT-(k), n);
             ((block_t*)output)[off]=b;
             ((block_t*)output)[off+1]=n;    
             k+=n;
             if(k>=constants::WORLD_HEIGHT){
                 ij+=1;
-                if(ij%constants::PAGE_DIM==0){
-                    xz=zadd(xz,3);
-                }
-                else{
-                    xz=zadd(xz,1);
-                }   
                 k=0;
             }
         }

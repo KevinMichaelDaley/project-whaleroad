@@ -67,7 +67,7 @@ public:
     if (spawn_on_surface || spawn_random) {
       zz = std::max(std::max(get_world()->get_z(xx, yy,nullptr,nullptr) + 13,
                              get_world()->ocean_level + 13),
-                    100);
+                    300);
     }
     set_position(xx, yy, zz);
     set_velocity(0.0f, 0.0f, 0.0f);
@@ -95,7 +95,7 @@ public:
     up_vector[2] = 1;
     climb_speed = 0.25f;
     fall_damage = 1.0f;
-    gravity_multiplier = 0.2f;
+    gravity_multiplier = 0.99f;
     fall_start = now();
     jump_start = now();
     jump_ = false;

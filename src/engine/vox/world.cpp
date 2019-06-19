@@ -1093,9 +1093,10 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
       }
       all_visible[cx * Nx + cy] = reuse[j];
       reuse[j]->start_at(
-          (cx * constants::CHUNK_WIDTH - radius) + nearest_multiple(center[0], constants::CHUNK_WIDTH),
-          (cy * constants::CHUNK_WIDTH - radius) + nearest_multiple(center[1], constants::CHUNK_WIDTH));
+          (cx * constants::CHUNK_WIDTH - radius) + (center[0]*constants::CHUNK_WIDTH),
+          (cy * constants::CHUNK_WIDTH - radius) + (center[1]*constants::CHUNK_WIDTH));
       reuse[j]->force_change();
+      reuse[j]->update(wld);
       ++j;
     }
   }
@@ -1119,12 +1120,12 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
       
     int Nx=(radius/constants::CHUNK_WIDTH*2+1);
     mesh_update_queue.reserve(all_visible.size());
-    if (std::abs(center[0] - center_old[0]) == 1) {
-      update_visible_list(center[0] - center_old[0], 0);
+    if (std::abs(center[0] - center_old[0]) >= 1) {
+      update_visible_list((center[0] - center_old[0]), 0);
       center_old[0] = center[0];
     }
-    if (std::abs(center[1] - center_old[1]) == 1) {
-      update_visible_list(0, center[1] - center_old[1]);
+    if (std::abs(center[1] - center_old[1]) >= 1) {
+      update_visible_list(0, (center[1] - center_old[1]));
       center_old[1] = center[1];
     }
     

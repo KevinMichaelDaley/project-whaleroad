@@ -63,7 +63,9 @@ class chunk_mesh : public drawable {
   typedef GL::Attribute<1, UnsignedInt> L2;
   typedef GL::Attribute<2, Vector3> pos;
   typedef GL::Attribute<3, Vector2> uv;
-  typedef GL::Attribute<4, UnsignedInt> nml;
+  typedef GL::Attribute<4, UnsignedInt> f1;
+  typedef GL::Attribute<5, UnsignedInt> f2;
+  typedef GL::Attribute<6, UnsignedInt> f3;
 
 public:
   struct BVertex {

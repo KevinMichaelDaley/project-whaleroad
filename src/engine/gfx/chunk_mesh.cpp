@@ -77,12 +77,16 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
         float L2=(float)L1[m]+L1[m+6]/64.0;
         L[m]=(int)std::min(L2,255.0f);
     }   
+    
     int Ltop=0;
+    int N=0;
     for(int m=1; m<6; ++m){
-        Ltop=std::max(L[m],Ltop);
+        Ltop+=L[m];
+        N+=bt[m];
     }
+    
     for(int m=1; m<6; ++m){
-        L[m]=std::min(127,Ltop/2);
+        L[m]=std::min(127,Ltop/(2*std::max(N,1)));
     }
     
     
@@ -132,7 +136,7 @@ void chunk_mesh::update(world* w) { gen(w); }
 struct CubeVertex {
   float x, y, z;
   float u, v;
-  int face_index;
+  unsigned int face_index1, faceindex2, faceindex3;
 };
 chunk_mesh::chunk_mesh() : vbo_sz(0) {
   mesh_points = GL::Mesh{};
@@ -142,16 +146,63 @@ chunk_mesh::chunk_mesh() : vbo_sz(0) {
   int max_index = 0;
   int max_vertex = 0;
   const float whichface[6] = {2, 1, 0, 0, 0, 0};
+  int face3[6][4];
+  int face2[6][4];
+  int mask[6]={0};
   for (int face = 0; face < 6; ++face) {
     for (int vert = 0; vert < 4; ++vert) {
-
+        face2[face][vert]=-1;
+        face3[face][vert]=-1;
+        int vx=(FacesOffset[face][vert][0]>0);
+        int vy=(FacesOffset[face][vert][1]>0);
+        int vz=(FacesOffset[face][vert][2]>0);
+        mask[face]|=1<<(int)(vx*4+vy*2+vz);
+    }
+  }
+  
+  for (int face = 0; face < 6; ++face) {
+    for (int vert = 0; vert < 4; ++vert) {
+        
+        int vx=(FacesOffset[face][vert][0]>0);
+        int vy=(FacesOffset[face][vert][1]>0);
+        int vz=(FacesOffset[face][vert][2]>0);
+        int vmask=1<<(int)(vx*4+vy*2+vz);
+        for (int face1 = 0; face1 < 6; ++face1) {
+            if(face1!=face && (mask[face1]&vmask!=0)){
+                face2[face][vert]=face1;
+                break;
+            }
+        }
+    }
+  }
+  for (int face = 0; face < 6; ++face) {
+    for (int vert = 0; vert < 4; ++vert) {
+        
+        int vx=(FacesOffset[face][vert][0]>0);
+        int vy=(FacesOffset[face][vert][1]>0);
+        int vz=(FacesOffset[face][vert][2]>0);
+        int vmask=1<<(int)(vx*4+vy*2+vz);
+        for (int face1 = 0; face1 < 6; ++face1) {
+            if(face1!=face && face1!=face2[face][vert] && (mask[face1]&vmask!=0)){
+                face3[face][vert]=face1;
+                break;
+            }
+        }
+    }
+  }
+                
+  for (int face = 0; face < 6; ++face) {
+    for (int vert = 0; vert < 4; ++vert) {
+        
+        assert(face2[face][vert]>=0 && face3[face][vert]>=0);
+          
       vertices[max_vertex++] = {(float)FacesOffset[face][vert][0],
                                 (float)FacesOffset[face][vert][1],
                                 (float)FacesOffset[face][vert][2],
                                 (float)FacesUV[vert][0] / 256.0f,
                                 (float)FacesUV[vert][1] / 3.0f +
                                     whichface[face] / 3.0f,
-                               face};
+                               (unsigned)face,(unsigned)face2[face][vert],(unsigned)face3[face][vert]};
     }
     indices[max_index++] = max_vertex - 4;
     indices[max_index++] = max_vertex - 3;
@@ -164,7 +215,7 @@ chunk_mesh::chunk_mesh() : vbo_sz(0) {
   indexBufferCube.setData(indices, GL::BufferUsage::StaticDraw);
   mesh.setPrimitive(GL::MeshPrimitive::Triangles)
       .addVertexBufferInstanced(vertexBuffer, 1, 0, L1{}, L2{})
-      .addVertexBuffer((vertexBufferCube), 0, pos{}, uv{}, nml{})
+      .addVertexBuffer((vertexBufferCube), 0, pos{}, uv{}, f1{},f2{},f3{})
       .setIndexBuffer((indexBufferCube), 0, GL::MeshIndexType::UnsignedByte)
       .setInstanceCount(0)
       .setCount(max_index);

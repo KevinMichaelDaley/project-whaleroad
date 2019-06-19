@@ -855,6 +855,7 @@ else{
                 
                 //printf("%i %i\n",i,j);
                 d2xy(N,&d,&i,&j);
+                sun_depth[i*N3+j]=page->zmap[(x-sx)*dim+y-sy];
         }
         i=0; j=0;
         
@@ -932,16 +933,18 @@ else{
                 const block_t* b2=&(barray[(((x-sx)*(int)dim)+(y-sy))*(int) constants::WORLD_HEIGHT]);
                 
                 int occ[1024]={0};
+                int zmaxneighbor=z;
                 bool occ_any=false;
                 if(i>0 && i<N-1){
                     if(j>0 && j<N-1){
                         for(int dx=-1; dx<=1; ++dx){
                             for(int dy=-1; dy<=1; ++dy){
-                                int z1=page->zmap[(x+dx-sx)*dim+(y+dy-sy)];
+                                int z1=sun_depth[(i+dx)*N3+(j+dy)];
                                 int dzmax=z1-z;
+                                int zmaxneighbor=std::max(dzmax,zmaxneighbor);
                                 if(dzmax<=0){
                                     continue;
-                                }
+//                                 }
                                 if(!dx && !dy) continue;
                                 int16_t* ip=&input[((i*N3+j+dx*N3+dy)*constants::WORLD_HEIGHT+z)*N2];
                                 
@@ -966,6 +969,7 @@ else{
                         }
                     }
                 }
+                }
                 
                 int ao=0;
                 if(!occ_any){
@@ -978,7 +982,7 @@ else{
                             
                             input[((i*N3+j)*constants::WORLD_HEIGHT+z)*N2+m]=0u;
                             }
-                        
+                            ao=255;
                      
                     
                 }
@@ -1000,7 +1004,8 @@ else{
                         
                     
                 }
-                for(int k=0; k<=std::min((int)z,constants::WORLD_HEIGHT-1); k+=std::max((int)skip_invisible_array[k],1)){
+                for(int k=0; k<=z; k+=std::max((int)skip_invisible_array[k],1)){
+                    
                             float L1[constants::LIGHT_COMPONENTS];
                             
                             for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
@@ -1016,6 +1021,10 @@ else{
                                         int dx=FacesNormal[nm][0];
                                         int dy=FacesNormal[nm][1];
                                         int dz=FacesNormal[nm][2];
+                                        int z2=sun_depth[(i+dx)*N3+j+dy];
+                                        if(k<z2 && dz==0){
+                                            dz=z2-k;
+                                        }
                                         if(k+dz<0 || k+dz>=constants::WORLD_HEIGHT){
                                             continue;
                                         }
@@ -1045,11 +1054,17 @@ else{
                                 max_delta=std::max(std::abs(delta),max_delta);
                             }
                             
-                            if(!b2[k]){
-                                break;
-                            }
+                }
+                ao=std::min(ao,255);
+                for(int k=z+1; k<zmaxneighbor; ++k){
+                    for(int i=0; i<12; ++i)
+                        Lbase[k*12+i]=(unsigned)ao;
                 }
                 
+                for(int k=zmaxneighbor; k<constants::WORLD_HEIGHT; ++k){
+                    for(int i=0; i<12; ++i)
+                        Lbase[k*12+i]=255u;
+                }
                  int bit=((x-x0)%8)*4+(y-y0)%4;
                  
                 if(max_delta<16){     
@@ -1171,9 +1186,7 @@ else{
       for (int dy = -32; dy <= 32; dy += constants::CHUNK_WIDTH) {
         int c1 = (dx + radius) * Nx / (int64_t) constants::CHUNK_WIDTH + (dy+radius) / (int64_t) constants::CHUNK_WIDTH;
         if (all_visible[c1]->is_dirty(wld)) {
-            
-          update_occlusion(all_visible[c1]->x0-1,all_visible[c1]->x0+16, all_visible[c1]->y0-1,all_visible[c1]->y0+16);
-          all_visible[c1]->update(wld);
+           fast_update_queue.push_back(all_visible[c1]);
         }
       }
     }
@@ -1227,8 +1240,22 @@ else{
         mesh_update_head = 0;
       }
     }
+      num_to_update =
+        first_frame ? fast_update_queue.size()
+                    : 2; // now do the fast update queue
+      for (int j = 0; j < num_to_update; ++j) {
+        if (fast_update_head < fast_update_queue.size()) {
+            update_occlusion(fast_update_queue[fast_update_head]->x0-1,fast_update_queue[fast_update_head]->x0+16, fast_update_queue[fast_update_head]->y0-1,fast_update_queue[fast_update_head]->y0+16);
+        fast_update_queue[fast_update_head]->update(wld);
+        ++fast_update_head;
+      } else {
+        fast_update_queue.clear();
+        fast_update_head = 0;
+      }
+    }
+  
     first_frame=false;
-  }
+}
 
   const std::vector<chunk_mesh *> & world_view::get_all_visible() { return all_visible; }
   world_view::~world_view() {

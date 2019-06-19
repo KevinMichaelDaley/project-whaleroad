@@ -109,9 +109,11 @@ private:
   int center[3], center_old[3];
   int radius;
   std::vector<chunk_mesh *> mesh_update_queue;
-  int mesh_update_head;
+  
+  std::vector<chunk_mesh *> fast_update_queue;
+  int mesh_update_head, fast_update_head;
 
-        int16_t* input;
+        int16_t* input, *sun_depth;
         bool* neighbor_mask;
 public:
   world *get_world() ;
@@ -120,6 +122,7 @@ public:
                                                     wld{w},
                                                     radius{rad},
                                                     mesh_update_head{0},
+                                                    fast_update_head{0},
                                                     first_frame{true},
                                                     updated_center{true}
                                     {
@@ -127,6 +130,7 @@ public:
                                         input=new int16_t[constants::WORLD_HEIGHT*200*200*(constants::LIGHT_COMPONENTS+3)]; 
                                         
                                         neighbor_mask=new bool[200*200];
+                                        sun_depth=new int16_t[200*200];
                                             
                                     }
   void update_center(Vector3 player_position) ;

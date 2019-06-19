@@ -176,8 +176,7 @@ private:
     }
     track_player();
     wv_->queue_update_stale_meshes();
-    for(int t2=0; t2<2; ++t2)
-        wv_->remesh_from_queue();
+    wv_->remesh_from_queue();
     redraw();
     timer::next();
   } 

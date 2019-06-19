@@ -54,14 +54,15 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
     if (!block_is_visible(b2)) {
       continue;
     }
-    int L[std::max(1,constants::LIGHT_COMPONENTS)]={0x0};
-    for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
+    int L[6]={0x0};
+    int bt[6]={0x0};
+    for(int m=0; m<6; ++m){
         
-        int dx=-FacesNormal[m%6][0];
-        int dy=-FacesNormal[m%6][1];
-        int dz=-FacesNormal[m%6][2];
+        int dx=FacesNormal[m%6][0];
+        int dy=FacesNormal[m%6][1];
+        int dz=FacesNormal[m%6][2];
         if(z+dz<0 || z+dz>constants::WORLD_HEIGHT-1){
-            L[m]=255;
+            L[m%6]=255;
         }
         block_t b2=wld->get_voxel(x+x0+dx,y+y0+dy,z+dz);
         if(b2>1){
@@ -70,26 +71,18 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
         if(b2<0){
             continue;
         }
+        bt[m]=1;
         uint8_t* L1=wld->get_light(x+x0+dx,y+y0+dy,z+dz);
-        L[m]=L1[m];
-        for(int n=0; n<constants::LIGHT_COMPONENTS; ++n){
-            
-            int dx2=FacesNormal[n%6][0];
-            int dy2=FacesNormal[n%6][1];
-            int dz2=FacesNormal[n%6][2];
-            int ix2=((dx2+1)*3+(dy2+1))*3+dz2+1;
-            
-            if(constants::LPV_WEIGHT[m*27+ix2]<0){
-                L[m]=std::max((int)L[m],(int)L1[n]); 
-            }
-        }
+        ;
+        float L2=(float)L1[m]+L1[m+6]/64.0;
+        L[m]=(int)std::min(L2,255.0f);
     }   
     int Ltop=0;
-    for(int m=1; m<constants::LIGHT_COMPONENTS; ++m){
-        Ltop=std::max((int)L[m],Ltop);
+    for(int m=1; m<6; ++m){
+        Ltop=std::max(L[m],Ltop);
     }
-    for(int m=1; m<constants::LIGHT_COMPONENTS; ++m){
-        L[m]=std::min(255,std::max((int)L[m],Ltop));
+    for(int m=1; m<6; ++m){
+        L[m]=std::min(127,Ltop/2);
     }
     
     
@@ -158,7 +151,7 @@ chunk_mesh::chunk_mesh() : vbo_sz(0) {
                                 (float)FacesUV[vert][0] / 256.0f,
                                 (float)FacesUV[vert][1] / 3.0f +
                                     whichface[face] / 3.0f,
-                                face};
+                               face};
     }
     indices[max_index++] = max_vertex - 4;
     indices[max_index++] = max_vertex - 3;

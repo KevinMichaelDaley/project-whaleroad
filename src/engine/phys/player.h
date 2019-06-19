@@ -36,7 +36,7 @@ public:
     a_down = false;
     s_down = false;
     d_down = false;
-    sensitivity = 0.1f;
+    sensitivity = 0.05f;
    }
   void spawn() { spawned = true; }
   void despawn() { spawned = false; }
@@ -108,7 +108,7 @@ public:
       strafe(false, 2.4);
     }
     if (jump_down) {
-      jump(7.0f);
+      jump(6.0f);
       jump_down = false;
     }
     viewProj=cam.projection*cam.view;
@@ -227,9 +227,9 @@ public:
       }
     }
     ((character*)this)->update_physics(dt);
-    look(look_x, look_y, dt, 0);
+    look(look_x,look_y, dt, 0);
     look_x=0;
-    look_y=0;
+     look_y=0;
     Vector3 eye, fw, up;
     ((character*)this)->get_eye_basis(eye,fw,up);
     cam.look_at(eye,fw,up);

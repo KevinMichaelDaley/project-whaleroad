@@ -111,7 +111,7 @@ private:
   std::vector<chunk_mesh *> mesh_update_queue;
   int mesh_update_head;
 
-        uint8_t* input;
+        int16_t* input;
         bool* neighbor_mask;
 public:
   world *get_world() ;
@@ -124,7 +124,7 @@ public:
                                                     updated_center{true}
                                     {
                                         
-                                        input=new uint8_t[constants::WORLD_HEIGHT*200*200*(constants::LIGHT_COMPONENTS+3)]; 
+                                        input=new int16_t[constants::WORLD_HEIGHT*200*200*(constants::LIGHT_COMPONENTS+3)]; 
                                         
                                         neighbor_mask=new bool[200*200];
                                             

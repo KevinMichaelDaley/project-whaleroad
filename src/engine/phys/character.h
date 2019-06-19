@@ -55,8 +55,8 @@ public:
       rz=eye_positions[2]+x[2];
   }
   character(world* wld, float xx = 0, float yy = 0, float zz = 0, bool spawn_random = true,
-            bool spawn_on_surface = true, float rx = 0.3, float ry = 0.3,
-            float rz = 0.5, float eye_height = 0.35, float angle = 0){
+            bool spawn_on_surface = true, float rx = 0.5, float ry = 0.5,
+            float rz = 1.2, float eye_height = 0.35, float angle = 0){
     wld_=wld;
     first_frame = true;
     health = 1.0f;
@@ -65,9 +65,10 @@ public:
       yy = ((rand() % 10)) + 1000;
     }
     if (spawn_on_surface || spawn_random) {
-      zz = std::max(std::max(get_world()->get_z(xx, yy,nullptr,nullptr) + 13,
-                             get_world()->ocean_level + 13),
-                    300);
+      wld->get_voxel(xx,yy,0);
+      zz = std::max(std::max(get_world()->get_z(xx, yy,nullptr,nullptr)+2,
+                             get_world()->ocean_level),
+                    1);
     }
     set_position(xx, yy, zz);
     set_velocity(0.0f, 0.0f, 0.0f);
@@ -222,7 +223,8 @@ public:
         std::max((xdot[2]) * dt - gravity_multiplier * (!on_land && !on_water) *
                                       9.81f * (float)(now() - fall_start) * dt,
                  -terminal_velocity * dt);
-    float dy = ((xdot[1]) * dt + (on_land + (!on_land && on_water) * 0.1)
+    float dy = ((xdot[1]) * dt + (on_land + (!on_land && on_water) * 0.3 +
+                                  (!on_land && !on_water) * 0.1)
                     ? walk_vector[1] * friction * dt
                     : 0.0);
     float dx = ((xdot[0]) * dt + (on_land + (!on_land && on_water) * 0.3 +
@@ -451,7 +453,7 @@ public:
     look_vector[2] = fwd.z();
     //up_vector[0] = up2.x();
     //up_vector[1] = up2.y();
-    //up_vector[2] = up2.z();
+   // up_vector[2] = up2.z();
   } /*
   void look(float x, float y, float dt, int which_head) {
           float q[4];

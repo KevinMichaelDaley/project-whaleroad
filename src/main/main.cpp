@@ -104,11 +104,7 @@ public:
     load_world("world");
     int x,y,z;
     spawn();
-    Vector3 pos=scene_.get_player(0)->get_position();
-    x=pos.x();
-    y=pos.y();
-    z=std::max(pos.z()-1.0,0.0);
-    w_->set_voxel(x,y,z,STONE);
+    
     
   }
   void load_world(std::string name) {
@@ -168,16 +164,19 @@ private:
   /*  if (!player0->is_alive()) {
       die();
     }*/
+#ifndef __ANDROID__
+    touch=false;
+#endif  
     if(touch){
         touch_time+=timer::step();
     }
     scene_.update(timer::step());
-    if(rand()%10==0){
+    if(rand()%100==0){
         Debug{}<<timer::step()<<Utility::Debug::newline;
     }
     track_player();
     wv_->queue_update_stale_meshes();
-    for(int t2=0; t2<20; ++t2)
+    for(int t2=0; t2<2; ++t2)
         wv_->remesh_from_queue();
     redraw();
     timer::next();

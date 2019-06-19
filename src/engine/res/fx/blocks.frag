@@ -54,6 +54,6 @@ void main(){
         z2=texture(shadowmap7,ShadowCoordPostW.xy).r/8.0+zs*7.0;
     }
     float shadow = float(z2>0.9999*ShadowCoordPostW.z);
-	frag_color0=vec4(mix(texture(atlas,coord.xy).rgb*(shadow+col+0.15)*0.5,fog_color,max(0,zw.x/zw.y*0.5+0.5)*0.25), 1.0);
-	//frag_color0=vec4(shadow,shadow,shadow,1.0);
+	frag_color0=vec4(mix(texture(atlas,coord.xy).rgb*(shadow+1)*(col+0.1),fog_color,max(0,zw.x/zw.y*0.5+0.5)*0.25), 1.0);
+	//frag_color0=vec4(col.r/2,col.r/2,col.r/2,1.0);
 }

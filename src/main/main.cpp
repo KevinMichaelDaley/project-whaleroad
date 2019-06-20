@@ -132,7 +132,7 @@ public:
     scene_.create_default_player(player_name, w_);
 
     //console.load_settings();
-    int draw_dist = 96;//get_cvar("r_view_distance");
+    int draw_dist = 96 ;//get_cvar("r_view_distance");
     wv_ = new world_view(w_, scene_.get_player(0)->get_position(), draw_dist);
     wv_->update_occlusion(draw_dist);
     wv_->initialize_meshes();

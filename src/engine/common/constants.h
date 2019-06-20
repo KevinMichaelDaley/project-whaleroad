@@ -1,6 +1,6 @@
 #pragma once
 namespace constants {
-constexpr const  int WORLD_HEIGHT = 256;
+constexpr const  int WORLD_HEIGHT = 500 ;
 constexpr const  int UDP_MTU = 576; 
 constexpr const  int MAX_IP_HEADER_SIZE = 60;
 constexpr const  int UDP_HEADER_SIZE = 8;

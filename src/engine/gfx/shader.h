@@ -19,7 +19,7 @@
 #include <Magnum/Magnum.h>
 #include <sstream>
 #include <unordered_map>
-
+#define SHADOW_CASCADES 4
 
 std::string read_text_file(std::string filename) {
   FILE *f = fopen(filename.c_str(), "r");
@@ -92,10 +92,10 @@ class block_default_forward_pass{
     scene* scene_;
     player* player_;
     GL::Texture2D* atlas_;
-    GL::Texture2D shadowMap[8];
-    GL::Framebuffer* shadowFramebuffer[8];
+    GL::Texture2D shadowMap[SHADOW_CASCADES];
+    GL::Framebuffer* shadowFramebuffer[SHADOW_CASCADES];
     
-    GL::Renderbuffer depthStencil[8];
+    GL::Renderbuffer depthStencil[SHADOW_CASCADES];
     
 public:
     block_default_forward_pass(GL::Texture2D& atlas):
@@ -103,7 +103,7 @@ public:
             atlas_=&atlas;
             fwd.texture("atlas", *atlas_);
             fwd.uniform("sun_color", Vector3(1,1,1));
-            for(int l=0; l<8; ++l){
+            for(int l=0; l<SHADOW_CASCADES; ++l){
                 depthStencil[l].setStorage(GL::RenderbufferFormat::DepthStencil,{8192,8192});
             (shadowMap[l] = GL::Texture2D{})
             .setStorage(1, GL::TextureFormat::R32F, {8192,8192})
@@ -128,7 +128,7 @@ public:
         scene_=s;
         fwd.texture("atlas", *atlas_);
         fwd.uniform("sun_color", Vector3(1,1,1));
-        fwd.uniform("fog_color",Vector3{0.8,0.69,0.7});
+        fwd.uniform("fog_color",Vector3{0.79,0.69,0.7});
         return *this;
     }
     block_default_forward_pass& set_player(player* p){
@@ -137,7 +137,7 @@ public:
     }
     camera get_sun_cam(int i, int j){
         camera cam2;
-        cam2.set_ortho({3000.0,3000.0}, 0.1+(constants::WORLD_HEIGHT+5)*i/8.0, 0.1+(constants::WORLD_HEIGHT+5)*(j)/8.0);
+        cam2.set_ortho({3000.0,3000.0}, 0.1+(constants::WORLD_HEIGHT+5)*i/double(SHADOW_CASCADES), 0.1+(constants::WORLD_HEIGHT+5)*(j)/double(SHADOW_CASCADES));
         cam2.look_at(Vector3{0,0,constants::WORLD_HEIGHT+1},{sin(0.01),0,-cos(0.01)},{cos(0.01),0,sin(0.01)});
         return cam2;
     }
@@ -146,7 +146,7 @@ public:
         
         
 
-        for(int l=0; l<8; ++l){
+        for(int l=0; l<SHADOW_CASCADES; ++l){
             
             caster.uniform("view", get_sun_cam(l,l+1).view);
             caster.uniform("projection", get_sun_cam(l,l+1).projection);
@@ -156,6 +156,7 @@ public:
                 
             for(int i=0,e=all_chunks.size(); i<e; ++i){
                     chunk_mesh* chunk=all_chunks[i];
+                    if(chunk==nullptr) continue;
                     chunk->copy_to_gpu();
                     caster.uniform("x0", chunk->x0);
                     caster.uniform("y0", chunk->y0);
@@ -173,21 +174,23 @@ public:
         fwd.texture("shadowmap1", shadowMap[1]);
         fwd.texture("shadowmap2", shadowMap[2]);
         fwd.texture("shadowmap3", shadowMap[3]);
+        /*
         fwd.texture("shadowmap4", shadowMap[4]);
         fwd.texture("shadowmap5", shadowMap[5]);
         fwd.texture("shadowmap6", shadowMap[6]);
-        fwd.texture("shadowmap7", shadowMap[7]);
+        fwd.texture("shadowmap7", shadowMap[7]);*/
         fwd.texture("atlas", *atlas_);
-        fwd.uniform("light_view", get_sun_cam(0,8).view);
-        fwd.uniform("light_projection", get_sun_cam(0,8).projection);
+        fwd.uniform("light_view", get_sun_cam(0,SHADOW_CASCADES).view);
+        fwd.uniform("light_projection", get_sun_cam(0,SHADOW_CASCADES).projection);
         
         
         
         
         fwd.uniform("sun_color", Vector3(1,1,1));
-        fwd.uniform("fog_color",Vector3{0.8,0.69,0.7});
+        fwd.uniform("fog_color",Vector3{0.79,0.69,0.7});
         for(int i=0,e=all_chunks.size(); i<e; ++i){
             chunk_mesh* chunk=all_chunks[i];
+            if(chunk==nullptr) continue;
             fwd.uniform("x0", chunk->x0);
             fwd.uniform("y0", chunk->y0);
             chunk->draw(&fwd);

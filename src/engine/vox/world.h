@@ -127,10 +127,10 @@ public:
                                                     updated_center{true}
                                     {
                                         
-                                        input=new int16_t[constants::WORLD_HEIGHT*200*200*(constants::LIGHT_COMPONENTS+3)]; 
+                                        input=(int16_t*) malloc((int64_t)(sizeof(int16_t)*constants::WORLD_HEIGHT*80*80*(constants::LIGHT_COMPONENTS+3))); 
                                         
-                                        neighbor_mask=new bool[200*200];
-                                        sun_depth=new int16_t[200*200];
+                                        neighbor_mask=new bool[80*80];
+                                        sun_depth=new int16_t[80*80];
                                             
                                     }
   void update_center(Vector3 player_position) ;

@@ -789,11 +789,15 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
       
         int c0=center[0]*constants::CHUNK_WIDTH;
         int c1=center[1]*constants::CHUNK_WIDTH;
-        int x0=c0-(subradius+1);
-        int y0=c1-(subradius+1);
-        int x1=c0+(subradius+1);
-        int y1=c1+(subradius+1);
-        update_occlusion(x0,x1,y0,y1);
+        int x0=c0-(subradius);
+        int y0=c1-(subradius);
+        int x1=c0+(subradius);
+        int y1=c1+(subradius);
+        for(int ix=x0; ix<=nearest_multiple(x1,64); ix+=64){
+            for(int iy=y0; iy<=nearest_multiple(y1,64); iy+=64){
+            update_occlusion(ix-1,ix+64,iy-1,iy+64);
+            }
+        }
         
   }
   
@@ -944,7 +948,7 @@ else{
                                 int zmaxneighbor=std::max(dzmax,zmaxneighbor);
                                 if(dzmax<=0){
                                     continue;
-//                                 }
+                                 }
                                 if(!dx && !dy) continue;
                                 int16_t* ip=&input[((i*N3+j+dx*N3+dy)*constants::WORLD_HEIGHT+z)*N2];
                                 
@@ -969,7 +973,7 @@ else{
                         }
                     }
                 }
-                }
+                
                 
                 int ao=0;
                 if(!occ_any){
@@ -1061,11 +1065,7 @@ else{
                         Lbase[k*12+i]=(unsigned)ao;
                 }
                 
-                for(int k=zmaxneighbor; k<constants::WORLD_HEIGHT; ++k){
-                    for(int i=0; i<12; ++i)
-                        Lbase[k*12+i]=255u;
-                }
-                 int bit=((x-x0)%8)*4+(y-y0)%4;
+                int bit=((x-x0)%8)*4+(y-y0)%4;
                  
                 if(max_delta<16){     
                  page->has_changes_in_8x4_block(x , y)[0] ^=  ((uint64_t(1u)<<uint64_t(bit)));
@@ -1184,10 +1184,11 @@ else{
     
     for (int dx = -32; dx <= 32; dx += constants::CHUNK_WIDTH) {
       for (int dy = -32; dy <= 32; dy += constants::CHUNK_WIDTH) {
-        int c1 = (dx + radius) * Nx / (int64_t) constants::CHUNK_WIDTH + (dy+radius) / (int64_t) constants::CHUNK_WIDTH;
-        if (all_visible[c1]->is_dirty(wld)) {
-           fast_update_queue.push_back(all_visible[c1]);
-        }
+          
+            int c1 = (dx + radius) * Nx / (int64_t) constants::CHUNK_WIDTH + (dy+radius) / (int64_t) constants::CHUNK_WIDTH;
+            if (all_visible[c1]->is_dirty(wld)) {
+                fast_update_queue.push_back(all_visible[c1]);
+            }
       }
     }
     for (int dx = 0; dx <= radius; dx += constants::CHUNK_WIDTH) {
@@ -1228,7 +1229,7 @@ else{
     }
     int num_to_update =
         first_frame ? mesh_update_queue.size()
-                    : 1; // we don't need to update more than one chunk mesh per
+                    : 2; // we don't need to update more than one chunk mesh per
                          // frame and it takes a little while anyway
     for (int j = 0; j < num_to_update; ++j) {
       if (mesh_update_head < mesh_update_queue.size()) {
@@ -1248,7 +1249,7 @@ else{
             update_occlusion(fast_update_queue[fast_update_head]->x0-1,fast_update_queue[fast_update_head]->x0+16, fast_update_queue[fast_update_head]->y0-1,fast_update_queue[fast_update_head]->y0+16);
         fast_update_queue[fast_update_head]->update(wld);
         ++fast_update_head;
-      } else {
+      } else {  
         fast_update_queue.clear();
         fast_update_head = 0;
       }

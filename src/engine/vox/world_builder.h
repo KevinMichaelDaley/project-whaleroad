@@ -7,6 +7,8 @@
 #include <sys/mman.h>
 #include <dlfcn.h>
 using namespace Magnum;
+#define WORLD_SCALE 80
+#define WORLD_OFFSET 256
 class world_builder {
 private:
   static int fd;
@@ -81,15 +83,15 @@ public:
     }
     void get_generated_run(int x, int y, int z, block_t* b, int* n){
         if(method.compare("default")==0){
-            if(z<(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*300.0)-1){
-                b[0]=STONE; n[0]=(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*300.0)-1-z;
+            if(z<(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*WORLD_SCALE+WORLD_OFFSET)-1){
+                b[0]=STONE; n[0]=(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*WORLD_SCALE+WORLD_OFFSET)-1-z;
                 bool neg=true;
                 for(int i=-1; i<=1; ++i){ 
                     for(int j=-1; j<=1; ++j){ 
-                    if(int(height[(x+10+i)*(constants::PAGE_DIM+20)+y+10+j]*300.0)<z+1){
+                    if(int(height[(x+10+i)*(constants::PAGE_DIM+20)+y+10+j]*WORLD_SCALE+WORLD_OFFSET)<z+1){
                         neg=false;
                     }
-                    if(int(height[(x+10+i)*(constants::PAGE_DIM+20)+y+10+j]*300.0)<z+1){
+                    if(int(height[(x+10+i)*(constants::PAGE_DIM+20)+y+10+j]*WORLD_SCALE+WORLD_OFFSET)<z+1){
                         neg=false;
                      }
                     }
@@ -98,12 +100,12 @@ public:
                     b[0]=-STONE;
                 }
             }
-            else if(z<(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*300.0)){
+            else if(z<(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*WORLD_SCALE+WORLD_OFFSET)){
                 
                 b[0]=STONE; n[0]=1;
             }
                 
-            else if(z==(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*300.0)){
+            else if(z==(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*WORLD_SCALE+WORLD_OFFSET)){
                 b[0]=GRASS; n[0]=1;
             }
             else{

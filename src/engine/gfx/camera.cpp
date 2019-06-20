@@ -65,6 +65,6 @@ std::array<plane_t, 6> camera::frustum() {
 }*/
 camera::camera()
     : view(Matrix4{}), perspective(false), fov(100),
-      aspect(16.0 / 9.0), near_clip(0.1), far_clip(1000.0) {
+      aspect(16.0 / 9.0), near_clip(0.1), far_clip(100.0) {
   set_perspective(100, 16.0 / 9.0, 0.1, 1000.0);
 }

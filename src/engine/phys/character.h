@@ -66,7 +66,7 @@ public:
     }
     if (spawn_on_surface || spawn_random) {
       wld->get_voxel(xx,yy,0);
-      zz = std::max(std::max(get_world()->get_z(xx, yy,nullptr,nullptr)+2,
+      zz = std::max(std::max(get_world()->get_z(xx, yy,nullptr,nullptr)+3,
                              get_world()->ocean_level),
                     1);
     }

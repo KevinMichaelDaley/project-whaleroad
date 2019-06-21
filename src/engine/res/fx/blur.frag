@@ -1,9 +1,9 @@
 uniform sampler2D tex;
-in vec3 uv;
+in vec2 uv;
 layout(location=0) out vec3 blurred;
 
 const float pi = 3.1415926;
-const int samples = 15;
+const int samples = 8;
 const float sigma = float(samples) * 0.25;
 const float s = 2 * sigma * sigma; 
 float gauss(vec2 i)
@@ -22,7 +22,7 @@ vec3 gaussianBlur(vec2 uv, vec2 scale)
     {
         for(int j = -samples / 2; j < samples / 2; j++)
         {
-            offset = vec2(i, j);
+            offset = vec2(i, j)/samples;
             weight = gauss(offset);
             pixel += texture(tex, uv + scale * offset).rgb * weight;
             weightSum += weight;
@@ -31,5 +31,5 @@ vec3 gaussianBlur(vec2 uv, vec2 scale)
     return pixel / weightSum;
 }
 void main(){
-    blurred=gaussianBlur(tex,uv,1.0);
+    blurred=gaussianBlur(uv.xy,vec2(1.0,1.0)/8192.0);
 }

@@ -8,7 +8,7 @@
 #include <dlfcn.h>
 using namespace Magnum;
 #define WORLD_SCALE 80
-#define WORLD_OFFSET 256
+#define WORLD_OFFSET 10
 class world_builder {
 private:
   static int fd;

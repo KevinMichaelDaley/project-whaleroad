@@ -127,7 +127,7 @@ public:
                                                     updated_center{true}
                                     {
                                         
-                                        input=(int16_t*) malloc((int64_t)(sizeof(int16_t)*constants::WORLD_HEIGHT*80*80*(constants::LIGHT_COMPONENTS+3))); 
+                                        input=(int16_t*) malloc((int64_t)(sizeof(int16_t)*constants::WORLD_HEIGHT*80*80*(constants::LIGHT_COMPONENTS-6+3))); 
                                         
                                         neighbor_mask=new bool[80*80];
                                         sun_depth=new int16_t[80*80];

@@ -1,16 +1,13 @@
 			layout(location = 0) in highp uint L1;
 			layout(location = 1) in highp uint L2;
-			layout(location = 2) in vec3 pos;
-			layout(location = 3) in vec2 uv;
-			layout(location = 4) in uint face_index;
-			layout(location = 5) in uint face_neighbor1;
-			layout(location = 6) in uint face_neighbor2;
+			layout(location = 2) in highp uint L3;
+			layout(location = 3) in vec3 pos;
+			layout(location = 4) in vec2 uv;
+			layout(location = 5) in uint face_index;
+			layout(location = 6) in uint face_neighbor1;
+			layout(location = 7) in uint face_neighbor2;
 			uniform int x0,y0;
 			
-uniform sampler2D shadowmap0;
-uniform sampler2D shadowmap1;
-uniform sampler2D shadowmap2;
-uniform sampler2D shadowmap3;
 /*
 uniform sampler2D shadowmap4;
 uniform sampler2D shadowmap5;
@@ -23,14 +20,13 @@ uniform sampler2D shadowmap7;
   */
 			out vec3 col;
 			out vec2 coord;
-			out vec4 v;
+			out vec4 v,vpos;
             out vec4 p;
-			 out float shadow;
 			uniform mat4x4 projection, view;
 			
 			uniform mat4x4 light_projection;
 			uniform mat4x4 light_view;
-			uniform vec3 sun_color;
+			uniform vec3 sun_color, sky_color;
 			
             void main(){
                 
@@ -45,34 +41,13 @@ uniform sampler2D shadowmap7;
 				
 				uint which=uint(L1>>24u)&0xffu+(uint(L2&0xffu)<<8u);
 				coord=uv+vec2(float(which%256u)/256.0,0.0);
-				vec4 vpos=projection*view*vec4(position.xyz,1.0);
+				 vpos=projection*view*vec4(position.xyz,1.0);
 				
 				
 				float Lr=float(L1x+L1y+L1z)/45.0;
-				col=Lr*sun_color;
+				col=Lr*(sun_color+sky_color);
 				p=light_projection*light_view*vec4(position,1.0);
-				 vec4 ShadowCoordPostW = p / p.w;
-                float zmax=1.0;
-                float SHADOW_CASCADES=4.0;
-                float zs=zmax/SHADOW_CASCADES;
-                ShadowCoordPostW = ShadowCoordPostW * 0.5 + 0.5; 
-                float z=ShadowCoordPostW.z;
-                float z2=zmax;
-                if(z<zs){
-                    z2=texture(shadowmap0,ShadowCoordPostW.xy).r/SHADOW_CASCADES;
-                }
-                
-                else if(z<zs*2.0){
-                    z2=texture(shadowmap1,ShadowCoordPostW.xy).r/SHADOW_CASCADES+zs;
-                }
-                
-                else if(z<zs*3.0){
-                    z2=texture(shadowmap2,ShadowCoordPostW.xy).r/SHADOW_CASCADES+zs*2.0;
-                }
-                
-                else if(z<zs*4.0){
-                    z2=texture(shadowmap3,ShadowCoordPostW.xy).r/SHADOW_CASCADES+zs*3.0;
-                }
+				 
                 /*
                 else if(z<zs*5.0){
                     z2=texture(shadowmap4,ShadowCoordPostW.xy).r/SHADOW_CASCADES+zs*4.0;
@@ -90,7 +65,7 @@ uniform sampler2D shadowmap7;
                     z2=texture(shadowmap7,ShadowCoordPostW.xy).r/SHADOW_CASCADES+zs*7.0;
                 }
                 */
-                shadow = float(z2>0.999999*ShadowCoordPostW.z);
+                
                 v=view*p;
 				gl_Position=vpos;
 			}    

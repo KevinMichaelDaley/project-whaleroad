@@ -4,3 +4,6 @@
 [submodule "src/toolchains"]
 	path = src/toolchains
 	url = https://github.com/mosra/toolchains
+[submodule "src/extern/libmorton"]
+	path = src/extern/libmorton
+	url = https://github.com/Forceflow/libmorton

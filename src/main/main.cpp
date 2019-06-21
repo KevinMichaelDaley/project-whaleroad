@@ -67,7 +67,7 @@ public:
           argv(arguments.argv)
       {
     setSwapInterval(0);
-    setMouseLocked(true);   
+    setMouseLocked(true);  
 #else
     :  Platform::AndroidApplication(
                                   arguments
@@ -91,7 +91,7 @@ public:
         std::exit(2);
     }           
     
-    GL::Renderer::setClearColor({0.8,0.69,0.7,1.0});
+    GL::Renderer::setClearColor({0.08,0.069,0.07,1.0});
     Containers::Optional<Trade::ImageData2D> image = importer->image2D(0);
     CORRADE_INTERNAL_ASSERT(image);
     atlas.setWrapping(GL::SamplerWrapping::ClampToEdge)
@@ -134,8 +134,8 @@ public:
     //console.load_settings();
     int draw_dist = 96 ;//get_cvar("r_view_distance");
     wv_ = new world_view(w_, scene_.get_player(0)->get_position(), draw_dist);
-    wv_->update_occlusion(draw_dist);
     wv_->initialize_meshes();
+    wv_->update_occlusion(draw_dist);
     timer::set_start();
     scene_.get_player(0)->spawn(/*player::flags::SPAWN_ON_SURFACE |
                    player::flags::SPAWN_RANDOM_XY*/);
@@ -170,7 +170,7 @@ private:
     if(touch){
         touch_time+=timer::step();
     }
-    scene_.update(timer::step());
+    scene_.update(std::min(timer::step(),0.06));
     if(rand()%100==0){
         Debug{}<<timer::step()<<Utility::Debug::newline;
     }
@@ -178,7 +178,6 @@ private:
     wv_->queue_update_stale_meshes();
     wv_->remesh_from_queue();
     redraw();
-    timer::next();
   } 
   virtual void drawEvent() override {
 #ifdef __ANDROID__
@@ -189,6 +188,7 @@ private:
     GL::defaultFramebuffer.clear(GL::FramebufferClear::Color | GL::FramebufferClear::Depth);
     block_pass->set_scene(&scene_).set_player(scene_.get_player(0)).draw_world_view(wv_);
     swapBuffers();
+    timer::next();
     return;
   }
   void mouseMoveEvent(MouseMoveEvent &event) override {

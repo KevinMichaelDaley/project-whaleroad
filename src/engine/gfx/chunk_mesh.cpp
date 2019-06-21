@@ -24,18 +24,13 @@ bool chunk_mesh::gen_instance(int x, int y, int z, block_t b,
   unsigned char L10=(uint8_t)Lf[9];
   unsigned char L11=(uint8_t)Lf[10];
   unsigned char L12=(uint8_t)Lf[11];
-  
-  unsigned char L13=(uint8_t)Lf[12];
-  unsigned char L14=(uint8_t)Lf[13];
-  unsigned char L15=(uint8_t)Lf[14];
-  unsigned char L16=(uint8_t)Lf[15];
-  unsigned char L17=(uint8_t)Lf[16];
-  unsigned char L18=(uint8_t)Lf[17];
   uint32_t L1u = uint32_t(z2%65536) +
                 (uint32_t(xydiff) << 16uL) + (uint32_t(which%256) << 24uL);
   uint32_t L2u = uint64_t(which/256) + (uint64_t(L1+(L2<<4uL)+(L3<<8uL)+(L4<<12uL)+(L5<<16uL)+(L6<<20uL))<<8uL);
+  uint32_t L3u = uint64_t(which/256) + (uint64_t(L1+(L7<<4uL)+(L8<<8uL)+(L9<<12uL)+(L10<<16uL)+(L11<<20uL))<<8uL);
   v.L1 = L1u;
   v.L2 = L2u;
+  v.L3 = L3u;
   verts[Nverts++] = v;      
   return true;
 }
@@ -54,7 +49,7 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
     if (!block_is_visible(b2)) {
       continue;
     }
-    int L[6]={0x0};
+    int L[12]={0x0};
     int bt[6]={0x0};
     for(int m=0; m<6; ++m){
         
@@ -76,6 +71,7 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
         ;
         float L2=(float)L1[m]+L1[m+6]/64.0;
         L[m]=(int)std::min(L2,255.0f);
+        L[m+6]=(int) L1[m+12];
     }   
     
     int Ltop=0;
@@ -204,24 +200,24 @@ chunk_mesh::chunk_mesh() : vbo_sz(0) {
                                     whichface[face] / 3.0f,
                                (unsigned)face,(unsigned)face2[face][vert],(unsigned)face3[face][vert]};
     }
-    indices[max_index++] = max_vertex - 4;
     indices[max_index++] = max_vertex - 3;
     indices[max_index++] = max_vertex - 1;
-    indices[max_index++] = max_vertex - 1;
+    indices[max_index++] = max_vertex - 4;
     indices[max_index++] = max_vertex - 2;
     indices[max_index++] = max_vertex - 4;
+    indices[max_index++] = max_vertex - 1;
   }
   vertexBufferCube.setData(vertices, GL::BufferUsage::StaticDraw);
   indexBufferCube.setData(indices, GL::BufferUsage::StaticDraw);
   mesh.setPrimitive(GL::MeshPrimitive::Triangles)
-      .addVertexBufferInstanced(vertexBuffer, 1, 0, L1{}, L2{})
+      .addVertexBufferInstanced(vertexBuffer, 1, 0, L1{}, L2{},L3{})
       .addVertexBuffer((vertexBufferCube), 0, pos{}, uv{}, f1{},f2{},f3{})
       .setIndexBuffer((indexBufferCube), 0, GL::MeshIndexType::UnsignedByte)
       .setInstanceCount(0)
       .setCount(max_index);
 
   mesh_points.setPrimitive(GL::MeshPrimitive::Points)
-      .addVertexBuffer(vertexBuffer, 0, L1{}, L2{})
+      .addVertexBuffer(vertexBuffer, 0, L1{}, L2{}, L3{})
       .setCount(0);
   changed = false;
   force_dirty=false;

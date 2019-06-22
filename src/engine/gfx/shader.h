@@ -218,14 +218,15 @@ public:
         auto all_chunks=wv->get_all_visible();
         
             //GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
-            
+        camera sun_cam=get_sun_cam(0,SHADOW_CASCADES);
         GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
             GL::Renderer::setClearColor({1,1,1,1});
         for(int l=0; l<SHADOW_CASCADES; ++l){
             
+            camera slice_cam=get_sun_cam(0,SHADOW_CASCADES);
            // GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
-            caster.uniform("view", get_sun_cam(l,l+1).view);
-            caster.uniform("projection", get_sun_cam(l,l+1).projection);
+            caster.uniform("view", slice_cam.view);
+            caster.uniform("projection", slice_cam.projection);
             
             shadowFramebuffer[l]->clear(GL::FramebufferClear::Color|
                         GL::FramebufferClear::Depth|
@@ -234,13 +235,16 @@ public:
             for(int i=0,e=all_chunks.size(); i<e; ++i){
                     chunk_mesh* chunk=all_chunks[i];
                     if(chunk==nullptr) continue;
-                    if(l==0)
-                    chunk->copy_to_gpu();
+                    
                     caster.uniform("x0", chunk->x0);
                     caster.uniform("y0", chunk->y0);
-
-                
-                    chunk->draw(&caster);
+                    for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
+                        if(!chunk->is_visible(slice_cam,z0)) continue;
+                        if(l==0)
+                        chunk->copy_to_gpu(z0);
+                        chunk->draw(&caster,z0);
+                    }
+                    
             }
                         
             
@@ -257,8 +261,9 @@ public:
         GL::Renderer::setClearColor(sky_color);
         GL::defaultFramebuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth);
             GL::defaultFramebuffer.bind();
-        fwd.uniform("view", player_->get_cam().view);
-        fwd.uniform("projection", player_->get_cam().projection);
+        camera cam=player_->get_cam();
+        fwd.uniform("view", cam.view);
+        fwd.uniform("projection", cam.projection);
         
         
         fwd.texture("shadowmap0", shadowMap[0]);
@@ -266,8 +271,8 @@ public:
         fwd.texture("shadowmap2", shadowMap[2]);
         fwd.texture("shadowmap3", shadowMap[3]);
         fwd.texture("atlas", *atlas_);
-        fwd.uniform("light_view", get_sun_cam(0,SHADOW_CASCADES).view);
-        fwd.uniform("light_projection", get_sun_cam(0,SHADOW_CASCADES).projection);
+        fwd.uniform("light_view", sun_cam.view);
+        fwd.uniform("light_projection", sun_cam.projection);
         
         
         fwd.uniform("sun_color", sun_color);
@@ -278,9 +283,14 @@ public:
         for(int i=0,e=all_chunks.size(); i<e; ++i){
             chunk_mesh* chunk=all_chunks[i];
             if(chunk==nullptr) continue;
+            
             fwd.uniform("x0", chunk->x0);
             fwd.uniform("y0", chunk->y0);
-            chunk->draw(&fwd);
+            for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
+                if(!chunk->is_visible(cam,z0)) continue;
+                chunk->copy_to_gpu(z0);
+                chunk->draw(&fwd,z0);
+            }
         }
         return *this;
     }

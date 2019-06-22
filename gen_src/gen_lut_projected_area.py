@@ -1,6 +1,6 @@
 import math
 A=[]
-for i in range(0,32):
+for i in range(0,128):
     for j in range(0,32):
         if j<32-i:
             mask=0

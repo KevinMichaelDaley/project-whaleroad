@@ -397,7 +397,7 @@ bool world_page::set(
   if(b>1){
     zmap[(x-x0)*dim+(y-y0)]=std::max((int)zmap[(x-x0)*dim+(y-y0)],z+1);
     for(int i=0; i<=z; ++i){
-        for(int m=0; m<constants::LIGHT_COMPONENTS-6; m+=1){
+        for(int m=0; m<constants::LIGHT_COMPONENTS; m+=1){
             light[(((x - x0) * dim + (y - y0))*constants::WORLD_HEIGHT+i)*constants::LIGHT_COMPONENTS+m]=0u;
         }
     }
@@ -895,12 +895,12 @@ else{
                 for(int k=0; k<=std::min(z-1,constants::WORLD_HEIGHT-1); k+=std::max((int)skip_invisible_array[k],1)){
                         
                         int blk=std::abs(b2[k]);     
-                        for(int m=0; m<constants::LIGHT_COMPONENTS-6; ++m){
+                        for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
                             input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+m]=255-(int)Lbase[k*constants::LIGHT_COMPONENTS+m];
                         }
-                        input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+constants::LIGHT_COMPONENTS-6]=(block_is_opaque(blk))?255:0;
-                        input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+1+constants::LIGHT_COMPONENTS-6]=(int)block_emissive_strength(blk);
-                        input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+2+constants::LIGHT_COMPONENTS-6]=(b2[k]>0)?1:0;   
+                        input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+constants::LIGHT_COMPONENTS]=(block_is_opaque(blk))?255:0;
+                        input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+1+constants::LIGHT_COMPONENTS]=(int)block_emissive_strength(blk);
+                        input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+2+constants::LIGHT_COMPONENTS]=(b2[k]>0)?1:0;   
                       
                         if(!blk){   
                             break;
@@ -980,7 +980,7 @@ else{
                 int ao=0;
                 if(!occ_any){
                     
-                            for(int m=0; m<constants::LIGHT_COMPONENTS-6; m+=1){
+                            for(int m=0; m<constants::LIGHT_COMPONENTS; m+=1){
                             if(FacesOffset[m%6][2]<0) continue;
                             int Lold=Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m];
                             max_delta=std::max(max_delta,std::abs(255-(int)Lold));
@@ -1000,7 +1000,7 @@ else{
                     ao=(int)std::min((ao*255)/(1024*64.0f),255.0f);
                     //if(ao) std::cerr<<ao<<" ";  
                             
-                            for(int m=0; m<constants::LIGHT_COMPONENTS-6; m+=1){
+                            for(int m=0; m<constants::LIGHT_COMPONENTS; m+=1){
                             if(FacesOffset[m%6][2]<0) continue;                            
                             int Lold=Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m];
                             max_delta=std::max(max_delta,std::abs((int)ao-(int)Lold));
@@ -1012,12 +1012,12 @@ else{
                 }
                 for(int k=0; k<=z; k+=std::max((int)skip_invisible_array[k],1)){
                     
-                            float L1[constants::LIGHT_COMPONENTS-6];
-                            float L0[constants::LIGHT_COMPONENTS-6];
-                            for(int m=0; m<constants::LIGHT_COMPONENTS-6; ++m){
+                            float L1[constants::LIGHT_COMPONENTS];
+                            float L0[constants::LIGHT_COMPONENTS];
+                            for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
                                 L1[m]=0.0;
                             }
-                            for(int m=0; m<constants::LIGHT_COMPONENTS-6; ++m){
+                            for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
                                 L0[m]=Lbase[k*constants::LIGHT_COMPONENTS+m];
                             }
                             if(b2[k]<0){
@@ -1038,7 +1038,7 @@ else{
                                             continue;
                                         }
                                         int ix2=((i+dx)*N3+j+dy)*constants::WORLD_HEIGHT+k+dz;
-                                        if(input[ix2*N2+constants::LIGHT_COMPONENTS-6]){
+                                        if(input[ix2*N2+constants::LIGHT_COMPONENTS]){
                                             L1[constants::INVERSE_COMPONENTS[nm%6]+6]=L1[nm%6+6]*0.25;
                                             L1[nm%6+6]=-L1[nm%6+6];
                                             L1[constants::INVERSE_COMPONENTS[nm%6]]=-L1[nm%6]*0.25;
@@ -1055,7 +1055,7 @@ else{
                                         }
                             }
                             
-                            for(int m=0; m<constants::LIGHT_COMPONENTS-6; ++m){
+                            for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
                                 int Lold=(int)L0[m];
                                 int Lnew=std::min(float(Lold)+(L1[m]*255.0),255.0);
                                 Lbase[k*constants::LIGHT_COMPONENTS+m]=(uint8_t) Lnew;
@@ -1168,7 +1168,7 @@ else{
         all_visible[all_visible.size() - 1]->start_at(i + center[0]*constants::CHUNK_WIDTH,
                                                       j + center[1]*constants::CHUNK_WIDTH);
         all_visible[all_visible.size() - 1]->update(wld);
-        all_visible[all_visible.size() - 1]->copy_to_gpu();
+        //all_visible[all_visible.size() - 1]->copy_to_gpu();
       }
     }
   }
@@ -1236,11 +1236,11 @@ else{
     }
     int num_to_update =
         first_frame ? mesh_update_queue.size()
-                    : 1; // we don't need to update more than one chunk mesh per
+                    : 2; // we don't need to update more than one chunk mesh per
                          // frame and it takes a little while anyway
     for (int j = 0; j < num_to_update; ++j) {
       if (mesh_update_head < mesh_update_queue.size()) {
-        update_occlusion(mesh_update_queue[mesh_update_head]->x0-1,mesh_update_queue[mesh_update_head]->x0+16, mesh_update_queue[mesh_update_head]->y0-2,mesh_update_queue[mesh_update_head]->y0+16);
+        update_occlusion(mesh_update_queue[mesh_update_head]->x0-1,mesh_update_queue[mesh_update_head]->x0+constants::CHUNK_WIDTH+1, mesh_update_queue[mesh_update_head]->y0-2,mesh_update_queue[mesh_update_head]->y0+constants::CHUNK_WIDTH+1);
         mesh_update_queue[mesh_update_head]->update(wld);
         ++mesh_update_head;
       } else {
@@ -1253,7 +1253,7 @@ else{
                     : 2; // now do the fast update queue
       for (int j = 0; j < num_to_update; ++j) {
         if (fast_update_head < fast_update_queue.size()) {
-            update_occlusion(fast_update_queue[fast_update_head]->x0-1,fast_update_queue[fast_update_head]->x0+16, fast_update_queue[fast_update_head]->y0-1,fast_update_queue[fast_update_head]->y0+16);
+            update_occlusion(fast_update_queue[fast_update_head]->x0-1,fast_update_queue[fast_update_head]->x0+constants::CHUNK_WIDTH+1, fast_update_queue[fast_update_head]->y0-1,fast_update_queue[fast_update_head]->y0+constants::CHUNK_WIDTH+1);
         fast_update_queue[fast_update_head]->update(wld);
         ++fast_update_head;
       } else {  

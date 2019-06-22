@@ -1,11 +1,10 @@
 			layout(location = 0) in highp uint L1;
 			layout(location = 1) in highp uint L2;
-			layout(location = 2) in highp uint L3;
-			layout(location = 3) in vec3 pos;
-			layout(location = 4) in vec2 uv;
-			layout(location = 5) in uint face_index;
-			layout(location = 6) in uint face_neighbor1;
-			layout(location = 7) in uint face_neighbor2;
+			layout(location = 2) in vec3 pos;
+			layout(location = 3) in vec2 uv;
+			layout(location = 4) in uint face_index;
+			layout(location = 5) in uint face_neighbor1;
+			layout(location = 6) in uint face_neighbor2;
 			uniform int x0,y0;
 			
 /*

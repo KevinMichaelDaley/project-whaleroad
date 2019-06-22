@@ -451,9 +451,9 @@ public:
     look_vector[0] = fwd.x();
     look_vector[1] = fwd.y();
     look_vector[2] = fwd.z();
-    //up_vector[0] = up2.x();
-    //up_vector[1] = up2.y();
-   // up_vector[2] = up2.z();
+    up_vector[0] = up2.x();
+    up_vector[1] = up2.y();
+    up_vector[2] = up2.z();
   } /*
   void look(float x, float y, float dt, int which_head) {
           float q[4];

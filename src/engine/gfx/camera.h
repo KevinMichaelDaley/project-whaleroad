@@ -15,5 +15,6 @@ struct camera {
                        float new_far_clip);
   void set_ortho(Vector2 new_scale, float near_clip, float far_clip);
   void look_at(Vector3 eye_position, Vector3 eye_direction, Vector3 up);
+  bool frustum_cull_box(Range3D box);
   camera();
 };

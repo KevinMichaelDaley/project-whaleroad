@@ -1,4 +1,7 @@
 #include "camera.h"
+
+#include "Magnum/Math/Frustum.h"
+#include "Magnum/Math/Intersection.h"
 #include <cassert>
 void camera::set_perspective(float new_fov, float new_aspect,
                              float new_near_clip, float new_far_clip) {
@@ -47,7 +50,7 @@ void camera::set_ortho(Vector2 new_scale, float new_near_clip, float new_far_cli
 }
 void camera::look_at(Vector3 eye_position, Vector3 eye_direction, Vector3 up) {
   view = Matrix4::lookAt(eye_position, eye_position + eye_direction, up)
-             .inverted();
+             .invertedRigid();
 }
 /*
 std::array<plane_t, 6> camera::frustum() {
@@ -64,7 +67,22 @@ std::array<plane_t, 6> camera::frustum() {
   }
 }*/
 camera::camera()
-    : view(Matrix4{}), perspective(false), fov(80),
-      aspect(16.0 / 9.0), near_clip(0.1), far_clip(80.0) {
-  set_perspective(100, 16.0 / 9.0, 0.1, 80.0);
+    : view(Matrix4{}), perspective(true), fov(100),
+      aspect(21.0 / 9.0), near_clip(0.1), far_clip(100.0) {
+if(perspective){
+  set_perspective(fov, aspect, near_clip, far_clip);
 }
+else{
+    set_ortho(fov*Vector2(aspect,1),near_clip,far_clip);
+}
+}
+
+ bool camera::frustum_cull_box(Range3D box){
+            
+        Magnum::Frustum f=Magnum::Frustum::fromMatrix(projection*view);
+        if(Magnum::Math::Intersection::rangeFrustum(box,f)){
+            return true;
+        }
+        if(Magnum::Math::Intersection::pointFrustum(box.backBottomLeft(),f)) return true;
+        return false;
+ }

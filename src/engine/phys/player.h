@@ -88,8 +88,8 @@ public:
   }
 #endif
   void mousemove(int x, int y) {
-    look_x += x *timer::step();
-    look_y += y *timer::step();
+    look_x += x *sensitivity;
+    look_y += y *sensitivity;
   }
   double block_last;
   int lag;

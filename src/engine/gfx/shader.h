@@ -93,13 +93,14 @@ class block_default_forward_pass{
     
     typedef GL::Attribute<0, Vector2> pos;
     typedef GL::Attribute<1, Vector2> uv;
-    shader fwd, caster, blur;
+    shader deferred, caster, gbuffer;
     scene* scene_;
     player* player_;
     GL::Texture2D* atlas_;
+    GL::Texture2D gbuffertex;
     GL::Texture2D shadowMap[SHADOW_CASCADES];
     GL::Framebuffer* shadowFramebuffer[SHADOW_CASCADES];
-    GL::Framebuffer CullFrameBuffer;
+    GL::Framebuffer GBuffer;
     
     GL::Renderbuffer depthStencil[SHADOW_CASCADES];
     
@@ -116,8 +117,8 @@ class block_default_forward_pass{
     };
 public:
     block_default_forward_pass(GL::Texture2D& atlas):
-        CullFrameBuffer{Range2Di{{}, {320,240}}},
-        fwd{"blocks"}, caster{"caster"}, blur{"blur"}{
+        GBuffer(GL::defaultFramebuffer.viewport()),
+        deferred{"deferred"}, caster{"caster"}, gbuffer{"gbuffer"}{
             
             const Vertex lb{ { -1, -1 },{ 0, 0 } };         // left bottom
             const Vertex lt{ { -1,  1 },{ 0, 1 } };         // left top
@@ -137,13 +138,11 @@ public:
                     pos{},
                     uv{});
             atlas_=&atlas;
-            fwd.texture("atlas", *atlas_);
-            fwd.uniform("sun_color", Vector3(1,1,1));
             for(int i=0; i<1024*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT*2; ++i){
                 q[i]=new GL::SampleQuery{GL::SampleQuery::Target::AnySamplesPassed};
             }
             for(int l=0; l<SHADOW_CASCADES; ++l){
-                depthStencil1.setStorage(GL::RenderbufferFormat::DepthStencil,{SMAP_RES(l),SMAP_RES(l)});
+               
             
                 depthStencil[l].setStorage(GL::RenderbufferFormat::DepthStencil,{SMAP_RES(l),SMAP_RES(l)});
             (shadowMap[l] = GL::Texture2D{})
@@ -161,25 +160,30 @@ public:
                         Corrade::Utility::Error() << status;
                         std::exit( 0 );
                     }
-                    
-                CullFrameBuffer.attachRenderbuffer(
-        GL::Framebuffer::BufferAttachment::DepthStencil, depthStencil1)
+            }
+             depthStencil1.setStorage(GL::RenderbufferFormat::DepthStencil, {GL::defaultFramebuffer.viewport().sizeX(),GL::defaultFramebuffer.viewport().sizeY()});
+            (gbuffertex = GL::Texture2D{})
+            .setStorage(1, GL::TextureFormat::RGBA16F, {GL::defaultFramebuffer.viewport().sizeX(),GL::defaultFramebuffer.viewport().sizeY()})
+            .setMinificationFilter(GL::SamplerFilter::Linear)
+            .setMagnificationFilter(GL::SamplerFilter::Linear);
+                GBuffer.attachTexture(GL::Framebuffer::ColorAttachment(0), gbuffertex, 0)
+                .attachRenderbuffer(GL::Framebuffer::BufferAttachment::DepthStencil, depthStencil1)
                 .mapForDraw({{ 0, {GL::Framebuffer::ColorAttachment( 0 )} }});
-                status =  CullFrameBuffer.checkStatus( Magnum::GL::FramebufferTarget::Draw );
+                auto status =  GBuffer.checkStatus( Magnum::GL::FramebufferTarget::Draw );
                    if( status != Magnum::GL::Framebuffer::Status::Complete )
                     {
                         Corrade::Utility::Error() << status;
                         std::exit( 0 );
                     }
-            }
+            
             
    
     }
     block_default_forward_pass& set_scene(scene* s){
         scene_=s;
-        fwd.texture("atlas", *atlas_);
-        fwd.uniform("sun_color", Vector3(1,1,1));
-        fwd.uniform("fog_color",Vector3{0.79,0.69,0.7});
+        deferred.texture("atlas", *atlas_);
+        deferred.uniform("sun_color", Vector3(1,1,1));
+        deferred.uniform("fog_color",Vector3{0.79,0.69,0.7});
         return *this;
     }
     block_default_forward_pass& set_player(player* p){
@@ -323,38 +327,39 @@ public:
         }
         return;
     }
-        
     block_default_forward_pass& draw_world_view(world_view* wv){
         auto all_chunks=wv->get_all_visible();
         
         camera cam=player_->get_cam();
         
         camera sun_cam=get_sun_cam(0,SHADOW_CASCADES);
-        caster.uniform("view", cam.view);
-        caster.uniform("projection", cam.projection);   
-        GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
-        CullFrameBuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth).bind();
+        gbuffer.uniform("view", cam.view);
+        gbuffer.uniform("projection", cam.projection);   
+        GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
+        GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+        GL::Renderer::disable(GL::Renderer::Feature::Blending);
+        GBuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth).bind();
         for(int i=0,e=all_chunks.size(); i<e; ++i){
             
             chunk_mesh* chunk=all_chunks[i];
             
             if(chunk==nullptr) continue;
             
-            caster.uniform("x0", chunk->x0);
-            caster.uniform("y0", chunk->y0);
+            gbuffer.uniform("x0", chunk->x0);
+            gbuffer.uniform("y0", chunk->y0);
             for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
                 
-                if(!chunk->is_visible(sun_cam,z0) && !chunk->is_visible(cam,z0)) continue;
+                if(!chunk->is_visible(cam,z0)) continue;
                 int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
                 chunk->copy_to_gpu(z0);
                 q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->begin();
-                chunk->draw(&caster,z0);
+                chunk->draw(&gbuffer,z0);
                 q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->end();
             }
          }
-         GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
+         
             //GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
-        GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+        GL::Renderer::enable(GL::Renderer::Feature::Blending);
         GL::Renderer::setClearColor({1,1,1,1});
         for(int l=0; l<SHADOW_CASCADES; ++l){
             
@@ -376,16 +381,19 @@ public:
                     for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
                         if(!chunk->is_visible(slice_cam,z0)) continue;
                         int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
-                        q[ixc]->beginConditionalRender(GL::SampleQuery::ConditionalRenderMode::Wait);
-                        chunk->draw(&caster,z0);
+                        if(q[ixc]->result<bool>()){
+                            if(!chunk->is_visible(cam,z0)) q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->begin();
+                            chunk->draw(&caster,z0);
+                            if(!chunk->is_visible(cam,z0)) q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->end();
+                        }
                         q[ixc]->endConditionalRender();
                     }
                     
             }
         }
         
-            //GL::Renderer::setFaceCullingMode(GL::Renderer::PolygonFacing::Back);
-            //GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+           
+            GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
             //GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
             
         
@@ -395,38 +403,39 @@ public:
         GL::Renderer::setClearColor(sky_color);
         GL::defaultFramebuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth);
             GL::defaultFramebuffer.bind();
-        fwd.uniform("view", cam.view);
-        fwd.uniform("projection", cam.projection);
         
         
-        fwd.texture("shadowmap0", shadowMap[0]);
-        fwd.texture("shadowmap1", shadowMap[1]);
-        fwd.texture("shadowmap2", shadowMap[2]);
-        fwd.texture("shadowmap3", shadowMap[3]);
-        fwd.texture("atlas", *atlas_);
-        fwd.uniform("light_view", sun_cam.view);
-        fwd.uniform("light_projection", sun_cam.projection);
+        deferred.texture("shadowmap0", shadowMap[0]);
+        deferred.texture("shadowmap1", shadowMap[1]);
+        deferred.texture("shadowmap2", shadowMap[2]);
+        deferred.texture("shadowmap3", shadowMap[3]);
+        deferred.texture("atlas", *atlas_);
+        deferred.texture("gbuffer", gbuffertex);
+        Matrix4 viewproj=cam.projection*cam.view;
+        Vector4 corner0=viewproj.inverted()*Vector4(-1,-1,-1,1);
+        Vector4 corner1=viewproj.inverted()*Vector4(1,1,1,1);
+        deferred.uniform("frustum_corner0", sun_cam.projection*sun_cam.view*corner0);
+        deferred.uniform("frustum_corner1", sun_cam.projection*sun_cam.view*corner1);
+        deferred.uniform("sun_color", sun_color);
+        deferred.uniform("sky_color", sky_color);
         
-        
-        fwd.uniform("sun_color", sun_color);
-        fwd.uniform("sky_color", sky_color);
-        fwd.uniform("sun_dir", Vector3{-cos(t),0,-sin(t)});
-        
-        fwd.uniform("fog_color",Vector3{0.7,0.69,0.79});
+        deferred.uniform("fog_color",sky_color);
+        /*
         for(int i=0,e=all_chunks.size(); i<e; ++i){
             chunk_mesh* chunk=all_chunks[i];
             if(chunk==nullptr) continue;
-            fwd.uniform("x0", chunk->x0);
-            fwd.uniform("y0", chunk->y0);
+            deferred.uniform("x0", chunk->x0);
+            deferred.uniform("y0", chunk->y0);
             for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
                 if(!chunk->is_visible(cam,z0)) continue;
                 
                 int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
                 q[ixc]->beginConditionalRender(GL::SampleQuery::ConditionalRenderMode::Wait);
-                chunk->draw(&fwd,z0);
+                chunk->draw(&deferred,z0);
                 q[ixc]->endConditionalRender();
             }
-        }
+        }*/
+        fsquad.draw(deferred);
         for(int i=0,e=all_chunks.size(); i<e; ++i){
             
             for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){

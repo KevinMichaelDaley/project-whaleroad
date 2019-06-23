@@ -116,7 +116,7 @@ class block_default_forward_pass{
     };
 public:
     block_default_forward_pass(GL::Texture2D& atlas):
-        CullFrameBuffer{Range2Di{{}, {320,240}}},
+        CullFrameBuffer{Range2Di{{}, {128,128}}},
         fwd{"blocks"}, caster{"caster"}, blur{"blur"}{
             
             const Vertex lb{ { -1, -1 },{ 0, 0 } };         // left bottom
@@ -332,7 +332,7 @@ public:
         camera sun_cam=get_sun_cam(0,SHADOW_CASCADES);
         caster.uniform("view", cam.view);
         caster.uniform("projection", cam.projection);   
-  
+        GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
         CullFrameBuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth).bind();
         for(int i=0,e=all_chunks.size(); i<e; ++i){
             
@@ -352,6 +352,7 @@ public:
                 q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->end();
             }
          }
+         GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
             //GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
         GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
         GL::Renderer::setClearColor({1,1,1,1});
@@ -374,7 +375,8 @@ public:
                     caster.uniform("y0", chunk->y0);
                     for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
                         if(!chunk->is_visible(slice_cam,z0)) continue;
-                        
+                        if(!l) 
+                            chunk->copy_to_gpu(z0);
                         int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
                         q[ixc]->beginConditionalRender(GL::SampleQuery::ConditionalRenderMode::Wait);
                         chunk->draw(&caster,z0);
@@ -425,7 +427,14 @@ public:
                 q[ixc]->beginConditionalRender(GL::SampleQuery::ConditionalRenderMode::Wait);
                 chunk->draw(&fwd,z0);
                 q[ixc]->endConditionalRender();
-                std::swap(q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT],q[ixc]);
+            }
+        }
+        for(int i=0,e=all_chunks.size(); i<e; ++i){
+            
+            for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
+                
+                int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
+                std::swap(q[ixc], q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]);
             }
         }
         return *this;

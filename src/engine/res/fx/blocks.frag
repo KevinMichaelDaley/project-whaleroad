@@ -25,7 +25,7 @@ void main(){
                 ShadowCoordPostW = ShadowCoordPostW * 0.5 + 0.5; 
                 float z=ShadowCoordPostW.z;
                 float z2=zmax;
-                const float bias=0.9998; 
+                const float bias=0.999; 
                 float shadow=1.0;
                 z2=texture(shadowmap0,ShadowCoordPostW.xy).r/SHADOW_CASCADES;
                 shadow=min(shadow,float(z*bias<=z2));

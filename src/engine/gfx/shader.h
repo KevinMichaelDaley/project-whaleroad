@@ -379,8 +379,15 @@ public:
         GBuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth).bind();
         
         fsquad.draw(sky);
+        std::array<int,1024> indices={0};
+        std::array<float,1024> min_depth={0.0};
         for(int i=0,e=all_chunks.size(); i<e; ++i){
-            
+            indices[i]=i;
+            min_depth[i]=all_chunks[i]->min_depth(cam);
+        }
+        std::sort(indices.begin(), indices.begin()+all_chunks.size(), [min_depth](int i, int j){return min_depth[i]<min_depth[j];});
+        for(int j=0,e=all_chunks.size(); j<e; ++j){
+            int i=indices[j];
             chunk_mesh* chunk=all_chunks[i];
             
             if(chunk==nullptr) continue;

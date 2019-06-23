@@ -21,8 +21,8 @@
 #include <sstream>
 #include <unordered_map>
 #define SHADOW_CASCADES 4
-#define SMAP_RES(l) 256+(2048-256)*(l<4)
-#define SHADOW_DIST 800.0
+#define SMAP_RES(l) 1024
+#define SHADOW_DIST 400.0
 std::string read_text_file(std::string filename) {
   FILE *f = fopen(filename.c_str(), "r");
   fseek(f, 0, SEEK_END);

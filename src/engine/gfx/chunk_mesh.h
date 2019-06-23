@@ -56,6 +56,7 @@ const float FacesNormal[6][3] = {{0, 0, -1}, {0, 0, 1},  // bottom, top
                                  {0, -1, 0}, {0, 1, 0},  // back, front
                                  {-1, 0, 0}, {1, 0, 0}}; // left, right
 class chunk_mesh {
+  friend class block_default_forward_pass;
   bool force_dirty, dirty;
   size_t vbo_sz;
   int Nverts[constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT];
@@ -81,7 +82,7 @@ protected:
 
 public:
   int x0, y0;
-
+  int volume;
 public:
   bool is_dirty(world* w);
   void update(world* w);
@@ -94,10 +95,25 @@ public:
   GL::Mesh &get_mesh(int z) { return mesh[z]; }
   void force_change() { force_dirty = true; }
   void copy_to_gpu(int z);
-  virtual bool is_visible(camera cam, int z0) {
+  bool is_visible(camera cam, int z0) {
     return (Nverts[z0] > 0) && cam.frustum_cull_box(Range3D{{x0,y0,z0*constants::CHUNK_HEIGHT},{x0+constants::CHUNK_WIDTH,y0+constants::CHUNK_WIDTH, z0*constants::CHUNK_HEIGHT+constants::CHUNK_HEIGHT}});
   }
-  virtual void draw(GL::AbstractShaderProgram* program, int z){
+  float min_depth(camera cam, int zstart, int zend){
+      float zmin=1000000000;
+      for(int z0=zstart; z0<zend; ++z0){
+        for(int dx=0; dx<=1; ++dx){
+                for(int dy=0; dy<=1; ++dy){
+                    for(int dz=0; dz<=1; ++dz){
+                        Vector4 corner{dx*constants::CHUNK_WIDTH+x0, dy*constants::CHUNK_WIDTH+y0, dz*constants::CHUNK_HEIGHT+z0,1.0};
+                        Vector4 corner_p=((cam.projection*cam.view)*corner);
+                        zmin=std::min(zmin,corner_p.z()/corner_p.w()*0.5f+0.5f);
+                    }
+                }
+        }
+      }
+      return zmin;
+  }
+  void draw(GL::AbstractShaderProgram* program, int z){
     mesh[z].draw(*program);
   }
 };

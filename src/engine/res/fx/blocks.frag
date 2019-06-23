@@ -34,11 +34,11 @@ void main(){
                     shadow=min(shadow,float(z*bias<=z2));
                 }
                 if(z>zs*2.0){
-                    z2=texture(shadowmap1,ShadowCoordPostW.xy).r/SHADOW_CASCADES+zs*2.0;
+                    z2=texture(shadowmap2,ShadowCoordPostW.xy).r/SHADOW_CASCADES+zs*2.0;
                     shadow=min(shadow,float(z*bias<=z2));
                 }
                 if(z>zs*3.0){
-                    z2=texture(shadowmap1,ShadowCoordPostW.xy).r/SHADOW_CASCADES+zs*3.0;
+                    z2=texture(shadowmap3,ShadowCoordPostW.xy).r/SHADOW_CASCADES+zs*3.0;
                     shadow=min(shadow,float(z*bias<=z2));
                 }
 	frag_color0=vec4(applyFog(texture(atlas,coord.xy).rgb*(mix( vec3(0.17,0.16,0.18),sun_color,shadow)+0.3*col), vpos.z/vpos.w*0.5+0.5),1.0);

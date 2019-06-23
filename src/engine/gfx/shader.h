@@ -12,6 +12,7 @@
 #include <Magnum/GL/Version.h>
 
 #include <Magnum/GL/Framebuffer.h>
+#include <Magnum/GL/SampleQuery.h>
 #include <Magnum/GL/Renderbuffer.h>
 #include <Magnum/GL/RenderbufferFormat.h>
 #include <Magnum/GL/TextureFormat.h>
@@ -20,8 +21,8 @@
 #include <sstream>
 #include <unordered_map>
 #define SHADOW_CASCADES 4
-#define SMAP_RES(l) 2048
-#define SHADOW_DIST 400.0
+#define SMAP_RES(l) 256+(2048-256)*(l<4)
+#define SHADOW_DIST 800.0
 std::string read_text_file(std::string filename) {
   FILE *f = fopen(filename.c_str(), "r");
   fseek(f, 0, SEEK_END);
@@ -98,19 +99,24 @@ class block_default_forward_pass{
     GL::Texture2D* atlas_;
     GL::Texture2D shadowMap[SHADOW_CASCADES];
     GL::Framebuffer* shadowFramebuffer[SHADOW_CASCADES];
+    GL::Framebuffer CullFrameBuffer;
     
     GL::Renderbuffer depthStencil[SHADOW_CASCADES];
+    
+    GL::Renderbuffer depthStencil1;
     
     GL::Mesh fsquad;
     
     GL::Buffer _quadBuffer;
     
+    GL::SampleQuery* q[1024*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT*2];
     struct Vertex {
         Vector2 position;
         Vector2 textureCoordinates;
     };
 public:
     block_default_forward_pass(GL::Texture2D& atlas):
+        CullFrameBuffer{Range2Di{{}, {320,240}}},
         fwd{"blocks"}, caster{"caster"}, blur{"blur"}{
             
             const Vertex lb{ { -1, -1 },{ 0, 0 } };         // left bottom
@@ -133,7 +139,12 @@ public:
             atlas_=&atlas;
             fwd.texture("atlas", *atlas_);
             fwd.uniform("sun_color", Vector3(1,1,1));
+            for(int i=0; i<1024*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT*2; ++i){
+                q[i]=new GL::SampleQuery{GL::SampleQuery::Target::AnySamplesPassed};
+            }
             for(int l=0; l<SHADOW_CASCADES; ++l){
+                depthStencil1.setStorage(GL::RenderbufferFormat::DepthStencil,{SMAP_RES(l),SMAP_RES(l)});
+            
                 depthStencil[l].setStorage(GL::RenderbufferFormat::DepthStencil,{SMAP_RES(l),SMAP_RES(l)});
             (shadowMap[l] = GL::Texture2D{})
             .setStorage(1, GL::TextureFormat::R32F, {SMAP_RES(l),SMAP_RES(l)})
@@ -146,6 +157,16 @@ public:
                 .mapForDraw({{ 0, {GL::Framebuffer::ColorAttachment( 0 )} }});
                  auto status =  shadowFramebuffer[l]->checkStatus( Magnum::GL::FramebufferTarget::Draw );
                     if( status != Magnum::GL::Framebuffer::Status::Complete )
+                    {
+                        Corrade::Utility::Error() << status;
+                        std::exit( 0 );
+                    }
+                    
+                CullFrameBuffer.attachRenderbuffer(
+        GL::Framebuffer::BufferAttachment::DepthStencil, depthStencil1)
+                .mapForDraw({{ 0, {GL::Framebuffer::ColorAttachment( 0 )} }});
+                status =  CullFrameBuffer.checkStatus( Magnum::GL::FramebufferTarget::Draw );
+                   if( status != Magnum::GL::Framebuffer::Status::Complete )
                     {
                         Corrade::Utility::Error() << status;
                         std::exit( 0 );
@@ -214,13 +235,126 @@ public:
         cam2.look_at({100*(x/100)+SHADOW_DIST/2.0*cos(t),100*(y/100),SHADOW_DIST/2.0*sin(t)},{-cos(t),0.0,-sin(t)},{sin(t),0.0,cos(t)});
         return cam2;
     }
+    float cross(Vector2 x, Vector2 y){
+        return x.x()*y.y()-x.y()*y.x();
+    }
+    void drawTri(uint16_t* cull_array, int res, Vector3 vt1, Vector3 vt2, Vector3 vt3, int i){
+            /* spanning vectors of edge (v1,v2) and (v1,v3) */
+            vt1*=res/2.0;
+            vt2*=res/2.0;
+            vt3*=res/2.0;
+            int maxX = (int)std::floor(std::max(vt1.x(), std::max(vt2.x(), vt3.x())));
+            int minX = (int)std::floor(std::min(vt1.x(), std::min(vt2.x(), vt3.x())));
+            int maxY = (int)std::floor(std::max(vt1.y(), std::max(vt2.y(), vt3.y())));
+            int minY = (int)std::floor(std::min(vt1.y(), std::min(vt2.y(), vt3.y())));
+            Vector2 vs1 = Vector2{(vt2.x() - vt1.x()), (vt2.y() - vt1.y())};
+            Vector2 vs2 = Vector2{(vt3.x() - vt1.x()), (vt3.y() - vt1.y())};
+            if((vt1.z()<=0.0 || vt1.z()>1.0) &&
+               (vt2.z()<=0.0 || vt2.z()>1.0) &&
+               (vt3.z()<=0.0 || vt3.z()>1.0)){
+                return;
+            }
+            float z1inv=1.0/vt1.z();
+            float z2inv=1.0/vt2.z();
+            float vcross=cross(vs1,vs2);
+            for (int x = minX; x <= maxX; x+=1)
+            {
+                for (int y = minY; y <= maxY; y++)
+                {
+                    if(x<-res/2 || x>=res/2 || y<-res/2 || y>=res/2) continue;
+                    Vector2 q = Vector2(x - vt1.x(), y - vt1.y());
+
+                    float s = (float)cross(q,vs2) / vcross;
+                    float t = (float)cross(vs1,q) / vcross;
+
+                    if ( (s >= 0) && (t >= 0) && (s + t <= 1))
+                    { 
+                        float lambda=q.x()/vs1.x();
+                        float invz=(1.0-lambda)/z1inv+lambda/z2inv;
+                        int ix=std::floor(x+res/2)*res+std::floor(y+res/2);
+                        uint16_t z1=std::min(uint16_t(254u),(uint16_t)(255.0f*(0.5f/invz+0.5f)));
+                        uint16_t p0=cull_array[ix];
+                        uint16_t p1=z1<<8+i;
+                        cull_array[ix]=std::min(uint16_t(p0),uint16_t(p1));
+                    }
+                }
+            }
+            return;
+    }
+    void rasterize(chunk_mesh* chunk, int z0, camera cam, uint16_t* cull_array, int res, uint8_t index, bool whole_box_only=true){
+        Matrix4 viewproj=cam.projection*cam.view;
+        int x0=chunk->x0;
+        int y0=chunk->y0;
+        int N=constants::CHUNK_HEIGHT*constants::CHUNK_WIDTH*constants::CHUNK_WIDTH;
+        bool full=(chunk->volume==constants::CHUNK_WIDTH*constants::CHUNK_HEIGHT*constants::CHUNK_WIDTH);
+        if(whole_box_only && !full){
+                return;
+        }
+        if(full){
+            for(int face=0; face<6; ++face){
+                Vector3 v[4];
+                for(int vert=0; vert<4; ++vert){
+                    Vector4 vi=viewproj*(Vector4{x0+FacesOffset[face][vert][0]*constants::CHUNK_WIDTH,y0+FacesOffset[face][vert][1]*constants::CHUNK_WIDTH,z0+FacesOffset[face][vert][2]*constants::CHUNK_HEIGHT,1.0});
+                    v[vert]=Vector3{vi.x(),vi.y(),vi.z()}/vi.w();
+                }
+                drawTri(cull_array,res,v[1],v[3],v[0],index);
+                drawTri(cull_array,res,v[2],v[0],v[1],index);
+            }
+            return;
+        }
+        
+            
+            
+        for(int i=0,e=chunk->Nverts[z0]; i<e; ++i){
+            uint32_t L1=chunk->verts[N*z0+i].L2;
+            int xy=(L1>>16)&0xff;
+            int x=(xy>>4)+x0;
+            int y=(xy&0xf)+y0;
+            int z=(L1&0xffff);
+            for(int face=0; face<6; ++face){
+                Vector3 v[4];
+                for(int vert=0; vert<4; ++vert){
+                    Vector4 vi=viewproj*(Vector4{x+FacesOffset[face][vert][0],y+FacesOffset[face][vert][1],z+FacesOffset[face][vert][2],1.0});
+                    v[vert]=Vector3{vi.x(),vi.y(),vi.z()}/vi.w();
+                }
+                drawTri(cull_array,res,v[1],v[3],v[0],index);
+                drawTri(cull_array,res,v[2],v[0],v[1],index);
+            }
+        }
+        return;
+    }
+        
     block_default_forward_pass& draw_world_view(world_view* wv){
         auto all_chunks=wv->get_all_visible();
         
-            //GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+        camera cam=player_->get_cam();
+        
         camera sun_cam=get_sun_cam(0,SHADOW_CASCADES);
+        caster.uniform("view", cam.view);
+        caster.uniform("projection", cam.projection);   
+  
+        CullFrameBuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth).bind();
+        for(int i=0,e=all_chunks.size(); i<e; ++i){
+            
+            chunk_mesh* chunk=all_chunks[i];
+            
+            if(chunk==nullptr) continue;
+            
+            caster.uniform("x0", chunk->x0);
+            caster.uniform("y0", chunk->y0);
+            for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
+                
+                if(!chunk->is_visible(sun_cam,z0) && !chunk->is_visible(cam,z0)) continue;
+                int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
+                chunk->copy_to_gpu(z0);
+                q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->begin();
+                chunk->draw(&caster,z0);
+                q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->end();
+            }
+         }
+            //GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
         GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
-            GL::Renderer::setClearColor({1,1,1,1});
+        GL::Renderer::setClearColor({1,1,1,1});
         for(int l=0; l<SHADOW_CASCADES; ++l){
             
             camera slice_cam=get_sun_cam(0,SHADOW_CASCADES);
@@ -240,14 +374,14 @@ public:
                     caster.uniform("y0", chunk->y0);
                     for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
                         if(!chunk->is_visible(slice_cam,z0)) continue;
-                        if(l==0)
-                        chunk->copy_to_gpu(z0);
+                        
+                        int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
+                        q[ixc]->beginConditionalRender(GL::SampleQuery::ConditionalRenderMode::Wait);
                         chunk->draw(&caster,z0);
+                        q[ixc]->endConditionalRender();
                     }
                     
             }
-                        
-            
         }
         
             //GL::Renderer::setFaceCullingMode(GL::Renderer::PolygonFacing::Back);
@@ -261,7 +395,6 @@ public:
         GL::Renderer::setClearColor(sky_color);
         GL::defaultFramebuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth);
             GL::defaultFramebuffer.bind();
-        camera cam=player_->get_cam();
         fwd.uniform("view", cam.view);
         fwd.uniform("projection", cam.projection);
         
@@ -283,16 +416,29 @@ public:
         for(int i=0,e=all_chunks.size(); i<e; ++i){
             chunk_mesh* chunk=all_chunks[i];
             if(chunk==nullptr) continue;
-            
             fwd.uniform("x0", chunk->x0);
             fwd.uniform("y0", chunk->y0);
             for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
                 if(!chunk->is_visible(cam,z0)) continue;
-                chunk->copy_to_gpu(z0);
+                
+                int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
+                q[ixc]->beginConditionalRender(GL::SampleQuery::ConditionalRenderMode::Wait);
                 chunk->draw(&fwd,z0);
+                q[ixc]->endConditionalRender();
+                std::swap(q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT],q[ixc]);
             }
         }
         return *this;
+    }
+    ~block_default_forward_pass(){
+        for(int i=0; i<SHADOW_CASCADES; ++i){
+            
+            delete shadowFramebuffer[i];
+        }
+        
+        for(int i=0; i<1024 *constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT*2; ++i){
+            delete q[i];
+        }
     }
 };
 

@@ -34,13 +34,16 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
   int zmax = wld->get_z(x + x0, y + y0, skip_invisible_array);
   bool valid = false;
   block_t &b = wld->get_voxel(x + x0, y + y0, 0, valid);
-  
+  int Nz=zmax;
   for (int z = 0; z <= (int) std::min(unsigned(zmax), unsigned(constants::WORLD_HEIGHT-1));
        z += std::max(int(skip_invisible_array[z]), 1)) {
     block_t b2 = (&b)[z];
 
     if (!b2 && z > (int) wld->ocean_level)
       break;
+    if(!block_is_opaque(b2) && b2>0){
+        Nz-=1;
+    }
     if (!block_is_visible(b2)) {
       continue;
     }
@@ -79,12 +82,13 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
         L[m]=std::min(127,Ltop/(2*std::max(N,1)));
     }
     
-    
+    volume+=Nz;
     gen_instance((x), (y), (z), b2, L);
   }
 }
 
 void chunk_mesh::gen(world *wld) {
+  volume=0;
   for(int i=0; i<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++i){
       if(Nverts[i]==0){
           continue;

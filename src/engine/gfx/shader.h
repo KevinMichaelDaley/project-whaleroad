@@ -116,7 +116,7 @@ class block_default_forward_pass{
     };
 public:
     block_default_forward_pass(GL::Texture2D& atlas):
-        CullFrameBuffer{Range2Di{{}, {128,128}}},
+        CullFrameBuffer{Range2Di{{}, {320,240}}},
         fwd{"blocks"}, caster{"caster"}, blur{"blur"}{
             
             const Vertex lb{ { -1, -1 },{ 0, 0 } };         // left bottom
@@ -375,8 +375,6 @@ public:
                     caster.uniform("y0", chunk->y0);
                     for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
                         if(!chunk->is_visible(slice_cam,z0)) continue;
-                        if(!l) 
-                            chunk->copy_to_gpu(z0);
                         int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
                         q[ixc]->beginConditionalRender(GL::SampleQuery::ConditionalRenderMode::Wait);
                         chunk->draw(&caster,z0);

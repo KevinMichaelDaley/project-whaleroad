@@ -6,12 +6,13 @@
 			layout(location = 5) in uint face_neighbor1;
 			layout(location = 6) in uint face_neighbor2;
 			uniform int x0,y0;
-/* 
-  uint32_t L1u = uint32_t(z2%65536) +
+            uniform float fclip=80.0, nclip=0.1;
+/*  uint32_t L1u = uint32_t(z2%65536) +
                 (uint32_t(xydiff) << 16uL) + (uint32_t(which%256) << 24uL);
   uint32_t L2u = uint32_t(which/256) + uint32_t(L1+L2<<4uL+L3<<8uL+L4<<12uL+L5<<16uL+L6<<20uL)<<8uL;
   */
 			out vec4 gbuffer;
+			out float w;
 			uniform mat4x4 projection, view;
 			
             void main(){
@@ -32,7 +33,8 @@
                 vec2 coord=uv+vec2(float(which%256u)/256.0,0.0);
                 gbuffer.x=coord.x;
                 gbuffer.y=coord.y;
-                gbuffer.z=(vpos.w/vpos.z);
+                gbuffer.z=vpos.z;
                 gbuffer.w=Lr;
+                w=vpos.w;   
 				gl_Position=vpos;
 			}    

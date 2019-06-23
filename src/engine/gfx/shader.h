@@ -21,7 +21,7 @@
 #include <sstream>
 #include <unordered_map>
 #define SHADOW_CASCADES 4
-#define SMAP_RES(l) 1024
+#define SMAP_RES(l) 1920
 #define SHADOW_DIST 400.0
 std::string read_text_file(std::string filename) {
   FILE *f = fopen(filename.c_str(), "r");
@@ -93,7 +93,7 @@ class block_default_forward_pass{
     
     typedef GL::Attribute<0, Vector2> pos;
     typedef GL::Attribute<1, Vector2> uv;
-    shader deferred, caster, gbuffer;
+    shader deferred, caster, gbuffer,sky;
     scene* scene_;
     player* player_;
     GL::Texture2D* atlas_;
@@ -105,7 +105,7 @@ class block_default_forward_pass{
     GL::Renderbuffer depthStencil[SHADOW_CASCADES];
     
     GL::Renderbuffer depthStencil1;
-    
+    int frame;
     GL::Mesh fsquad;
     
     GL::Buffer _quadBuffer;
@@ -118,7 +118,8 @@ class block_default_forward_pass{
 public:
     block_default_forward_pass(GL::Texture2D& atlas):
         GBuffer(GL::defaultFramebuffer.viewport()),
-        deferred{"deferred"}, caster{"caster"}, gbuffer{"gbuffer"}{
+        deferred{"deferred"}, caster{"caster"}, gbuffer{"gbuffer"}, sky{"sky"}{
+            frame=0;
             
             const Vertex lb{ { -1, -1 },{ 0, 0 } };         // left bottom
             const Vertex lt{ { -1,  1 },{ 0, 1 } };         // left top
@@ -191,24 +192,61 @@ public:
         return *this;
     }
     Vector3 get_sky_color_night(float theta,int day_index){
-        return {0.1,0.0,0.06};
+        Vector3 night_color= {0.1,0.0,0.06};
+        
+        Vector3 dawn_color=Vector3{0.4,0.5,0.6};
+        Vector3 dusk_color=Vector3{0.5,0.4,0.45};
+        
+        if(theta<0.5){
+            return Math::lerp(dusk_color,night_color,theta*theta*4.0);
+        }
+        else{
+            return Math::lerp(night_color,dawn_color, theta*theta*4.0-1.0);
+        }
     }
     Vector3 get_sky_color_day(float theta,int day_index){
-        return {0.4,0.5,0.9};
+        Vector3 dawn_color=Vector3{0.4,0.5,0.6};
+        Vector3 day_color=Vector3{0.4,0.5,0.9};
+        Vector3 dusk_color=Vector3{0.5,0.4,0.45};
+        
+        if(theta<0.5){
+            return Math::lerp(dawn_color,day_color,theta*theta*4.0);
+        }
+        else{
+            return Math::lerp(day_color,dusk_color, theta*theta*4.0-1.0);
+        }
     }
     Vector3 get_sun_color(float theta,int day_index){
-        return {1.0,1.0,1};
+        Vector3 dawn_color=Vector3{0.99,0.5,0.6};
+        Vector3 day_color=Vector3{0.5,0.5,0.35};
+        Vector3 dusk_color=Vector3{0.5,0.55,0.45};
+        if(theta<0.5){
+            return Math::lerp(dawn_color,day_color,theta*theta*4.0);
+        }
+        else{
+            return Math::lerp(day_color,dusk_color, theta*theta*4.0-1.0);
+        }
     }
     Vector3 get_moon_color(float theta,int day_index){
-         return {0.1,0.1,0.1};
+        
+        Vector3 dawn_color=Vector3{0.99,0.5,0.6};
+        Vector3 night_color=Vector3{0.15,0.15,0.15};
+        Vector3 dusk_color=Vector3{0.5,0.55,0.45};
+        
+        if(theta<0.5){
+            return Math::lerp(dusk_color,night_color, theta*theta*4.0);
+        }
+        else{
+            return Math::lerp(night_color,dawn_color,  theta*theta*4.0-1.0);
+        }
     }
     float get_day_length(float year_offset){
         return 0.8;
     }
     float get_sky_angle(Vector3& sky_color, Vector3& sun_color, bool& is_day){
-        float SECONDS_IN_DAY_NIGHT=3000.0;
+        float SECONDS_IN_DAY_NIGHT=300.0;
         float DAYS_IN_YEAR=10;
-        float t=timer::now();
+        float t=timer::now()+SECONDS_IN_DAY_NIGHT/3.0;
         float time_since_sunrise=std::fmod(t,SECONDS_IN_DAY_NIGHT);
         int day_index=std::floor(t/SECONDS_IN_DAY_NIGHT);
         float SECONDS_IN_DAY=get_day_length(day_index/(float)DAYS_IN_YEAR)*SECONDS_IN_DAY_NIGHT;
@@ -219,13 +257,13 @@ public:
         if(is_day){
             sky_color=get_sky_color_day(theta,day_index);
             sun_color=get_sun_color(theta,day_index);
-            return theta*M_PI*0.99+M_PI*0.01;
+            return theta*M_PI;
         }
         else{
             float theta=std::fmod(time_since_sunrise,SECONDS_IN_DAY)/SECONDS_IN_NIGHT;
             sky_color=get_sky_color_night(theta,day_index);
             sun_color=get_moon_color(theta,day_index);
-            return theta*M_PI*0.99+M_PI*0.01;
+            return theta*M_PI;
         }
     }
     camera get_sun_cam(int i, int j){
@@ -236,7 +274,7 @@ public:
         Vector3 tmp1,tmp2;
         bool tmp3;
         float t=get_sky_angle(tmp1,tmp2,tmp3);
-        cam2.look_at({100*(x/100)+SHADOW_DIST/2.0*cos(t),100*(y/100),SHADOW_DIST/2.0*sin(t)},{-cos(t),0.0,-sin(t)},{sin(t),0.0,cos(t)});
+        cam2.look_at({100*(x/100)+SHADOW_DIST*sin(t),100*(y/100),SHADOW_DIST*cos(t)},{-sin(t),0.0,-cos(t)},{cos(t),0.0,sin(t)});
         return cam2;
     }
     float cross(Vector2 x, Vector2 y){
@@ -339,6 +377,8 @@ public:
         GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
         GL::Renderer::disable(GL::Renderer::Feature::Blending);
         GBuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth).bind();
+        
+        fsquad.draw(sky);
         for(int i=0,e=all_chunks.size(); i<e; ++i){
             
             chunk_mesh* chunk=all_chunks[i];
@@ -351,13 +391,16 @@ public:
                 
                 if(!chunk->is_visible(cam,z0)) continue;
                 int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
-                chunk->copy_to_gpu(z0);
-                q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->begin();
-                chunk->draw(&gbuffer,z0);
-                q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->end();
+                
+                if(q[ixc]->result<bool>() || (frame++)%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT)==z0){
+                    chunk->copy_to_gpu(z0);
+                    q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->begin();
+                    chunk->draw(&gbuffer,z0);
+                    q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->end();
+                }
             }
          }
-         
+         /*
             //GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
         GL::Renderer::enable(GL::Renderer::Feature::Blending);
         GL::Renderer::setClearColor({1,1,1,1});
@@ -381,7 +424,7 @@ public:
                     for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
                         if(!chunk->is_visible(slice_cam,z0)) continue;
                         int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
-                        if(q[ixc]->result<bool>()){
+                        if(q[ixc]->result<bool>() || (frame++)%all_chunks.size()==i){
                             if(!chunk->is_visible(cam,z0)) q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->begin();
                             chunk->draw(&caster,z0);
                             if(!chunk->is_visible(cam,z0)) q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->end();
@@ -391,7 +434,7 @@ public:
                     
             }
         }
-        
+        */
            
             GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
             //GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
@@ -412,14 +455,10 @@ public:
         deferred.texture("atlas", *atlas_);
         deferred.texture("gbuffer", gbuffertex);
         Matrix4 viewproj=cam.projection*cam.view;
-        Vector4 corner0=viewproj.inverted()*Vector4(-1,-1,-1,1);
-        Vector4 corner1=viewproj.inverted()*Vector4(1,1,1,1);
-        deferred.uniform("frustum_corner0", sun_cam.projection*sun_cam.view*corner0);
-        deferred.uniform("frustum_corner1", sun_cam.projection*sun_cam.view*corner1);
+        deferred.uniform("transform", sun_cam.projection*sun_cam.view*viewproj.inverted());
         deferred.uniform("sun_color", sun_color);
         deferred.uniform("sky_color", sky_color);
-        
-        deferred.uniform("fog_color",sky_color);
+        deferred.uniform("fog_color",Vector3{0.4,0.3,0.2});
         /*
         for(int i=0,e=all_chunks.size(); i<e; ++i){
             chunk_mesh* chunk=all_chunks[i];

@@ -1,6 +1,5 @@
 #pragma once
 #include "block.h"
-#include "res/hmap.h"
 #include "common/constants.h"
 #include "common/stream.h"
 #include <Magnum/Magnum.h>

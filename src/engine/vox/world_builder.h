@@ -52,9 +52,10 @@ public:
     float gen_pattern(int x, int y){
         float height=0.0;
         int ix=0;
+        uint64_t seed=45809384584;
         //for each power of 2, generate a random 4x4 pattern.
         //interpolate bilinearly and add octaves together.
-        for(int r=29; r>0; r-=1){
+        for(int r=29; r>3; r-=1){
             int xd=x>>r;
             int yd=y>>r;
             float s=(x%(1<<(r+1)))/float((1<<(r+1)));
@@ -65,16 +66,18 @@ public:
             for(int dx=0; dx<=1; dx+=1){
                 for(int dy=0; dy<=1; dy+=1){
                     int x2=xd+dx;
-                    int y2=yd+dy;
+                    int y2=yd+dy;   
                     int bit=(x2&1)*2+(y2&1);
                     //seed with position hash (to preserve spatial coherence) and do lcg once
-                    pattern[dx][dy]=!!((((x2/2)*65539+(y2/2))*48271)&(1<<bit));
+                    pattern[dx][dy]=!!((((x2/2)*65539+(y2/2)*31+seed)*48271)&(1<<bit));
                 }
             }
+            //printf("%f %f\n",s,t);
             float off_interp0=(1-s)*pattern[0][0]+s*pattern[1][0];
             float off_interp2=(1-s)*pattern[0][1]+s*pattern[1][1];
             float off_interp = 0.5*((1-t)*(off_interp0)+(t)*(off_interp2));
-            height+=(off_interp)/exp(0.18*(r-6.5)*(r-6.5))  ;
+            height+=(off_interp)/(ix*ix/255.0+1)  ;
+            seed|=uint64_t(pattern[0][0])<<uint64_t(r*2);
             ++ix;       
         }
        // printf("%f ", 20.0*height+20.0);

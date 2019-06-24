@@ -11,6 +11,6 @@ void main(){
     if(z>0.9999) color=vec4(sky_color,1.0);
     else{
     vec3 rgb=texture(atlas,g.rg).rgb*(mix(sky_color*0.05,sun_color,g.a));
-    color=vec4(mix(rgb,fog_color,pow(z,68.0)),1.0);
+    color=vec4(mix(rgb,fog_color,pow(z,48.0)),1.0);
     }
 }

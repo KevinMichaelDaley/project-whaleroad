@@ -93,7 +93,8 @@ class block_default_forward_pass{
     
     typedef GL::Attribute<0, Vector2> pos;
     typedef GL::Attribute<1, Vector2> uv;
-    shader deferred, caster, gbuffer,sky;
+    typedef GL::Attribute<0, Vector3> cpos;
+    shader deferred, passthrough, gbuffer,sky;
     scene* scene_;
     player* player_;
     GL::Texture2D* atlas_;
@@ -106,11 +107,11 @@ class block_default_forward_pass{
     
     GL::Renderbuffer depthStencil1;
     int frame;
-    GL::Mesh fsquad;
+    GL::Mesh fsquad, fullchunk;
     
-    GL::Buffer _quadBuffer;
-    
-    GL::SampleQuery* q[1024*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT*2];
+    GL::Buffer _quadBuffer, _cubeBuffer;
+    bool vis[4096*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT];
+    GL::SampleQuery* q[4096*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT];
     struct Vertex {
         Vector2 position;
         Vector2 textureCoordinates;
@@ -118,9 +119,8 @@ class block_default_forward_pass{
 public:
     block_default_forward_pass(GL::Texture2D& atlas):
         GBuffer(GL::defaultFramebuffer.viewport()),
-        deferred{"deferred"}, caster{"caster"}, gbuffer{"gbuffer"}, sky{"sky"}{
+        deferred{"deferred"}, passthrough{"passthrough"}, gbuffer{"gbuffer"}, sky{"sky"}{
             frame=0;
-            
             const Vertex lb{ { -1, -1 },{ 0, 0 } };         // left bottom
             const Vertex lt{ { -1,  1 },{ 0, 1 } };         // left top
             const Vertex rb{ { 1,  -1 },{ 1, 0 } };         // right bottom
@@ -132,16 +132,71 @@ public:
             };
         
             _quadBuffer.setData(quadData, GL::BufferUsage::StaticDraw);
+            
             fsquad
                 .setPrimitive(GL::MeshPrimitive::Triangles)
                 .setCount(6)
                 .addVertexBuffer(_quadBuffer, 0,
                     pos{},
                     uv{});
+                
+            float cube[]={
+                -1.0f,-1.0f,-1.0f, // triangle 1 : begin
+                -1.0f,-1.0f, 1.0f,
+                -1.0f, 1.0f, 1.0f, // triangle 1 : end
+                1.0f, 1.0f,-1.0f, // triangle 2 : begin
+                -1.0f,-1.0f,-1.0f,
+                -1.0f, 1.0f,-1.0f, // triangle 2 : end
+                1.0f,-1.0f, 1.0f,
+                -1.0f,-1.0f,-1.0f,
+                1.0f,-1.0f,-1.0f,
+                1.0f, 1.0f,-1.0f,
+                1.0f,-1.0f,-1.0f,
+                -1.0f,-1.0f,-1.0f,
+                -1.0f,-1.0f,-1.0f,
+                -1.0f, 1.0f, 1.0f,
+                -1.0f, 1.0f,-1.0f,
+                1.0f,-1.0f, 1.0f,
+                -1.0f,-1.0f, 1.0f,
+                -1.0f,-1.0f,-1.0f,
+                -1.0f, 1.0f, 1.0f,
+                -1.0f,-1.0f, 1.0f,
+                1.0f,-1.0f, 1.0f,
+                1.0f, 1.0f, 1.0f,
+                1.0f,-1.0f,-1.0f,
+                1.0f, 1.0f,-1.0f,
+                1.0f,-1.0f,-1.0f,
+                1.0f, 1.0f, 1.0f,
+                1.0f,-1.0f, 1.0f,
+                1.0f, 1.0f, 1.0f,
+                1.0f, 1.0f,-1.0f,
+                -1.0f, 1.0f,-1.0f,
+                1.0f, 1.0f, 1.0f,
+                -1.0f, 1.0f,-1.0f,
+                -1.0f, 1.0f, 1.0f,
+                1.0f, 1.0f, 1.0f,
+                -1.0f, 1.0f, 1.0f,
+                1.0f,-1.0f, 1.0f
+            };
+            for(int i=0; i<12; ++i){
+                cube[i*3+0]=(0.5*cube[i*3+0]+0.5)*constants::CHUNK_WIDTH;
+                cube[i*3+1]=(0.5*cube[i*3+1]+0.5)*constants::CHUNK_WIDTH;
+                cube[i*3+2]=(0.5*cube[i*3+2]+0.5)*constants::CHUNK_HEIGHT;
+            }
+            _cubeBuffer.setData(cube, GL::BufferUsage::StaticDraw);
+            
+            fullchunk
+                .setPrimitive(GL::MeshPrimitive::Triangles)
+                .setCount(12)
+                .addVertexBuffer(_cubeBuffer, 0,
+                    cpos{});
+            
             atlas_=&atlas;
-            for(int i=0; i<1024*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT*2; ++i){
+            for(int i=0; i<4096*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++i){
+                vis[i]=false;
                 q[i]=new GL::SampleQuery{GL::SampleQuery::Target::AnySamplesPassed};
             }
+            /*
             for(int l=0; l<SHADOW_CASCADES; ++l){
                
             
@@ -162,6 +217,7 @@ public:
                         std::exit( 0 );
                     }
             }
+            */
              depthStencil1.setStorage(GL::RenderbufferFormat::DepthStencil, {GL::defaultFramebuffer.viewport().sizeX(),GL::defaultFramebuffer.viewport().sizeY()});
             (gbuffertex = GL::Texture2D{})
             .setStorage(1, GL::TextureFormat::RGBA16F, {GL::defaultFramebuffer.viewport().sizeX(),GL::defaultFramebuffer.viewport().sizeY()})
@@ -369,22 +425,28 @@ public:
         auto all_chunks=wv->get_all_visible();
         
         camera cam=player_->get_cam();
-        
+        Matrix4 viewproj=cam.projection*cam.view;
         camera sun_cam=get_sun_cam(0,SHADOW_CASCADES);
         gbuffer.uniform("view", cam.view);
         gbuffer.uniform("projection", cam.projection);   
+        
         GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
-        GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+        GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
         GL::Renderer::disable(GL::Renderer::Feature::Blending);
         GBuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth).bind();
         
         fsquad.draw(sky);
-        std::array<int,1024> indices={0};
-        std::array<float,1024> min_depth={0.0};
+        GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+        std::array<int,4096> indices={0};
+        std::array<float,4096> min_depth={0.0};
         for(int i=0,e=all_chunks.size(); i<e; ++i){
             indices[i]=i;
-            min_depth[i]=all_chunks[i]->min_depth(cam);
+            float z=all_chunks[i]->min_depth(cam);
+            min_depth[i]=z;            
         }
+        
+                    
+        passthrough.uniform("transform", viewproj);  
         std::sort(indices.begin(), indices.begin()+all_chunks.size(), [min_depth](int i, int j){return min_depth[i]<min_depth[j];});
         for(int j=0,e=all_chunks.size(); j<e; ++j){
             int i=indices[j];
@@ -394,17 +456,33 @@ public:
             
             gbuffer.uniform("x0", chunk->x0);
             gbuffer.uniform("y0", chunk->y0);
+            passthrough.uniform("x0",chunk->x0);
+            passthrough.uniform("y0",chunk->y0);
             for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
-                
-                if(!chunk->is_visible(cam,z0)) continue;
                 int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
+                if(!chunk->is_visible(cam,z0)){ vis[ixc]=false; continue;}
                 
-                if(q[ixc]->result<bool>() || (frame++)%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT)==z0){
-                    chunk->copy_to_gpu(z0);
-                    q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->begin();
-                    chunk->draw(&gbuffer,z0);
-                    q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->end();
-                }
+                    if(!vis[ixc] || (frame++)==0 || q[ixc]->result<bool>() || (frame)%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT)==z0){
+                        vis[ixc]=true;
+                        q[ixc]->begin();
+                        chunk->copy_to_gpu(z0);
+                        chunk->draw(&gbuffer,z0);
+                        q[ixc]->end();
+                    }
+                    else{
+                        glColorMask(false,false,false,false);
+                        glDepthMask(false);
+                        glStencilMask(0);
+                        
+                        
+                        q[ixc]->begin();
+                        passthrough.uniform("z0",z0*constants::CHUNK_HEIGHT);
+                        fullchunk.draw(passthrough);
+                        q[ixc]->end();
+                        glColorMask(true,true,true,true);
+                        glDepthMask(true);
+                        glStencilMask(~0);
+                    }
             }
          }
          /*
@@ -455,14 +533,9 @@ public:
             GL::defaultFramebuffer.bind();
         
         
-        deferred.texture("shadowmap0", shadowMap[0]);
-        deferred.texture("shadowmap1", shadowMap[1]);
-        deferred.texture("shadowmap2", shadowMap[2]);
-        deferred.texture("shadowmap3", shadowMap[3]);
         deferred.texture("atlas", *atlas_);
         deferred.texture("gbuffer", gbuffertex);
-        Matrix4 viewproj=cam.projection*cam.view;
-        deferred.uniform("transform", sun_cam.projection*sun_cam.view*viewproj.inverted());
+        
         deferred.uniform("sun_color", sun_color);
         deferred.uniform("sky_color", sky_color);
         deferred.uniform("fog_color",Vector3{0.4,0.3,0.2});
@@ -482,6 +555,7 @@ public:
             }
         }*/
         fsquad.draw(deferred);
+        /*
         for(int i=0,e=all_chunks.size(); i<e; ++i){
             
             for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
@@ -489,7 +563,7 @@ public:
                 int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
                 std::swap(q[ixc], q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]);
             }
-        }
+        }*/
         return *this;
     }
     ~block_default_forward_pass(){
@@ -498,7 +572,7 @@ public:
             delete shadowFramebuffer[i];
         }
         
-        for(int i=0; i<1024 *constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT*2; ++i){
+        for(int i=0; i<4096 *constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++i){
             delete q[i];
         }
     }

@@ -598,181 +598,7 @@ uint64_t* world_page::has_changes_in_8x4_block(int x, int y) {
   return &(dirty_list[(uint64_t)(xi * (dim / 4) + yi)]);
 }
 
-/*
-        
-void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbors,
-                            uint16_t *z_neighbors, int ix, int iy, int x, int y,
-                            world_page *page, world *wld) {
-     page->dirty_list[(x - page->x0)/8 * page->dim / 4 + (y - page->y0)/4] =
-      (uint64_t)1uL << (uint64_t)32uL;
-  uint16_t *skip_invisible_array =
-      &skip_neighbors[0];
-  int z = z_neighbors[0];
-  int z0 = 0;
-  bool valid = false;
-  block_t *b = &(page->get(x, y, 0, valid));
-  if(!valid){
-      return;
-  }
-  uint8_t *Lbase = page->get_light(x, y, 0);
-  uint8_t max_delta=0;
-  for (int i = 0; i <= std::min(z, (int)constants::WORLD_HEIGHT);
-       i += std::max(int(skip_invisible_array[i]), 1)) {
-    
-    block_t b2 = b[i];
-    bool solid = block_is_opaque(b2);
-    bool visible = block_is_visible(b2);
-    
-    if (!b[i-1] && i > 8)
-      break;
-    if (!solid || !visible) {
-      continue;
-    }
-    uint8_t ao=0;
 
-    for (int dy = -31; dy < 31; ++dy) { // slice index
-      uint64_t occlusion_slice[2] = {0x0, 0x0};
-      for (int dx = -31; dx < 31; ++dx) { // x offset
-
-        uint16_t *skip2 = &skip_neighbors[((dy) * (63+4) + dx) *
-                                          (int)constants::WORLD_HEIGHT];
-        int zcol = z_neighbors[((dy) * (63+4) + dx)];
-
-        for (int dz = 32 - abs(dx); dz < 32; dz += std::max((int)skip2[i + dz],1)) { // z offset
-
-          if (i + dz > zcol)
-            break;
-
-          bool solid = skip2[i + dz] <= 1uL;
-          bool solid2 = skip2[i + abs(dx)] <= 1uL;
-          int index1 = (abs(dx) << 5) + dz;
-          int index2 = (dz << 5) + abs(dx);
-
-          occlusion_slice[dx > 0] |=
-              ((uint64_t)lut_projected_area[index1] * solid) *
-                  ((1u << (32 / dz)) - 1)
-              << abs(dy);
-
-          occlusion_slice[dx > 0] |=
-              ((uint64_t)lut_projected_area[index2] * solid2) *
-                  ((1u << (32 / dz)) - 1)
-              << abs(dy);
-        }
-      }
-
-      for (uint64_t b = 0; b < 64; ++b) {
-          for (int c = 0; c <= 1; ++c) {
-            ao += (!!(occlusion_slice[c] & (uint64_t(1) << b)));
-          }
-      }
-    }
-
-    
-      uint8_t L_old = Lbase[i* constants::LIGHT_COMPONENTS], L_new = (ao)*(256/128);
-      Lbase[i* constants::LIGHT_COMPONENTS] = L_new;
-      uint8_t delta=std::abs(L_new - L_old);
-      max_delta = std::max(delta, max_delta);
-      //     }
-      // above, explained:
-      // we compute ambient occlusion for a block using a sort of aliased cone
-      // tracing, as follows:
-      //  *****************
-      //   ***************
-      //    *************
-      //     ***********
-      //      *********
-      //       *******
-      //        *****
-      //         ***
-      //          x
-      //   consider the region bounded by a frustum facing upward with angle
-      //   from center to exterior set to 45* and height set to 32 blocks. a
-      //   single slice of this cone appears as above, though it is probably
-      //   stretched vertically due to the spacing of your text editor, and of
-      //   course this drawing is not 32 blocks high.  but the idea is there.
-      //   here, asterisks represent unoccluded empty space, spaces represent
-      //   set voxels, and hyphens represent occluded space; which is backwards
-      //   but it's so we can clearly see the entire cone. now, suppose we have
-      //   a vertical column of blocks set at some arbitrary position inside
-      //   this cone slice which is capable of occluding light.  then, imagine
-      //   casting rays using bresenham's line algorithm until we've projected
-      //   the entire solid volumetric slice onto the hemicube plane, centered
-      //   at our ray origin, with angle 90*, thereby determining how much of
-      //   the far hemisphere is obscured.
-      //    **-----********
-      //     **----*******
-      //      **-  ******
-      //       *********
-      //        *******
-      //         *****
-      //          ***
-      //           x
-      //
-      // we get something like this.  Intuitively speaking, we just need to know
-      // the number of asterisks and hyphens in the top row for any
-      // configuration of spaces, which will determine how much light is let
-      // through. but there is a much simpler way to do this than casting rays,
-      // which is to use an integer LUT over the entire frustum slice.  Every
-      // element is a bitmask describing the top row after a particular voxel is
-      // set, and we & them together to get the final value. in this case, for
-      // instance, we would have
-      //
-      //
-      //    110000011111111
-      //    **-----********
-      //     **----*******
-      //      **-  ******
-      //       *********
-      //        *******
-      //         *****
-      //          ***
-      //           x                  = 0x60FF
-      //
-      //  as a final bitmask, and the number of bits set would be the ambient
-      //  occlusion value for that slice. Except it would be a 32-bit value.
-      //  (we could also convolve the bitmask with a spherical harmonic basis to
-      //   get directional light, in which case the method is generally the same).
-      //
-      //  we obviously have to do many slices, but the good news is that our
-      //  rays are radially symmetric.  what this means is that moving a block
-      //  to the next slice is equivalent to moving it left or right, i.e., a
-      //  bitshift if the block intersects the next slice and no operation
-      //  otherwise.
-      // each block at z-distance dz from the ray origin will contribute to all
-      // slices within 32/dz of the current ray origin, but since the bitshifts
-      // we are doing form a geometric series with base 2, the total
-      // contribution is easy to compute; it's lut_value*(1<<(32/dz)-1) by
-      // formula. it also means we can increase our occlusion distance to 80,
-      // because we need only store a mask for the left half of each slice; we
-      // can simply reverse the bits to obtain the corresponding mask in the
-      // right half, for the block which is reflected across the normal axis.
-      // Finally, if we want to rotate the cone 90 degrees, that's really just
-      // the same as swapping the x and y coordinates of the block, which is
-      // again a simple bitwise operation, before the LUT lookup. using this
-      // method we can raycast the entire hemisphere.
-
-      //(because ambient occlusion has the property of reciprocity, every block
-      // which contributes significantly to the current occlusion value must be
-      // added to the dirty_list.  this is obviously localized to an 32x32x32
-      // hemicube around the block).
-
-      z0 = i;
-    }
-
-    if (max_delta >= 16) {
-      int xx, yy, zz, dim;
-      page->bounds(xx, yy, zz, dim);
-      for (int dx = -4; dx < 4; ++dx) {
-        for (int dy = -8; dy < 8; ++dy) {
-          if (!dx && !dy) {
-            continue;
-          }
-          page->has_changes_in_8x4_block(x + dx * 8, y + dy * 4) |= 0xffffffffuL;
-        }
-      }
-    }
-  }
-  */
   world * world_view::get_world() { return wld; }
   void world_view::update_center(Vector3 player_position) {
     updated_center=true;
@@ -786,7 +612,7 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
     center[1] = std::floor(yy) / constants::CHUNK_WIDTH;
     center[2] = std::floor(zz);
   }
-  //simpler flood fill lighting
+  
   void world_view::update_occlusion(int subradius){
       
         int c0=center[0]*constants::CHUNK_WIDTH;
@@ -797,7 +623,7 @@ void world_light::calculate_block_shadow(block_t *column, uint16_t *skip_neighbo
         int y1=c1+(subradius);
         for(int ix=x0; ix<=nearest_multiple(x1,64); ix+=64){
             for(int iy=y0; iy<=nearest_multiple(y1,64); iy+=64){
-            update_occlusion(ix-1,ix+64,iy-1,iy+64);
+                update_occlusion(ix,ix+64,iy,iy+64);
             }
         }
         
@@ -820,8 +646,11 @@ else{
 }
 
 
-  void world_view::update_occlusion(int x0,int x1, int y0, int y1) {
-        
+  void world_view::update_occlusion(int x0,int x1, int y0, int y1, int D) {
+        x0-=D;
+        y0-=D;
+        y1+=D-1 ;
+        x1+=D-1;
         world_page* page=wld->get_page(x0,y0,0);
         int sx,sy,sz,dim;
         
@@ -849,9 +678,9 @@ else{
                 uint64_t bit=uint64_t(bit_x*4+bit_y);
                 if(((changed)&(uint64_t(1u)<<bit))!=0){
                     
-                        for(int dx=-1; dx<=1; ++dx){
-                            for(int dy=-1; dy<=1; ++dy){
-                                if(i+dx>=1 && j+dy>=1 && i+dx<N3-1 && j+dy<N3-1){
+                        for(int dx=-D; dx<=D; ++dx){
+                            for(int dy=-D; dy<=D; ++dy){
+                                if(i+dx>=D && j+dy>=D && i+dx<N3-D && j+dy<N3-D){
                                     neighbor_mask[(i+dx)*N3+j+dy]=true;
                                 }
                             }
@@ -914,9 +743,11 @@ else{
         barray=&page->get(sx,sy,0,valid);
                     
         unsigned i2=0,j2=0;
-        for(unsigned d=0,count=0; count<=(N-2)*(N-2); ++count){
-                i=i2+1;
-                j=j2+1;
+
+        
+        for(unsigned d=0,count=0; count<=(N-2*D)*(N-2*D); ++count){
+                i=i2+D;
+                j=j2+D;
                 int x=i+x0;
                 int y=j+y0;
                 if(!page->contains(x,y,0)){
@@ -938,35 +769,38 @@ else{
                 int z=wld->get_z(x,y,skip_invisible_array,page);
                 const block_t* b2=&(barray[(((x-sx)*(int)dim)+(y-sy))*(int) constants::WORLD_HEIGHT]);
                 
-                int occ[1024]={0};
+                uint8_t occ[128*128]={0};
                 int zmaxneighbor=z;
                 bool occ_any=false;
-                if(i>=1 && i<N-1){
-                    if(j>=1 && j<N-1){
-                        for(int dx=-1; dx<=1; ++dx){
-                            for(int dy=-1; dy<=1; ++dy){
+                if(i>=D && i<N-D){
+                    if(j>=D && j<N-D){
+                        for(int dx=-D; dx<=D; ++dx){
+                            for(int dy=-D; dy<=D; ++dy){
                                 int z1=sun_depth[(i+dx)*N3+(j+dy)];
                                 int dzmax=z1-z;
-                                int zmaxneighbor=std::max(dzmax,zmaxneighbor);
+                                int zmaxneighbor=std::max(z1,zmaxneighbor);
                                 if(dzmax<=0){
                                     continue;
                                  }
                                 if(!dx && !dy) continue;
-                                int16_t* ip=&input[((i*N3+j+dx*N3+dy)*constants::WORLD_HEIGHT+z)*N2];
-                                
-                                for(int dz=1; dz<=std::min(dzmax, constants::WORLD_HEIGHT-z); ++dz){
-                                    if(!ip[dz*N2+2+constants::LIGHT_COMPONENTS]) break;
-                                    if(!ip[dz*N2+constants::LIGHT_COMPONENTS]) continue;
+                                int16_t* ip=&input[(((i+dx)*N3+j+dy)*constants::WORLD_HEIGHT+z)*N2];   
+                                for(int dz=1; dz<=std::min(dzmax, constants::WORLD_HEIGHT-1-z); ++dz){
+                                    //if(!ip[(dz-1)*N2+constants::LIGHT_COMPONENTS]){
+                                     
+                                        //continue;
+                                    //}
                                     //rasterize the block bottom face
                                     //using integer pixel coordinates at 32x32 res
-                                    int x0=8*dx/dz;   
-                                    int y0=8*dy/dz;
-                                    int y1=8*dy/dz+8/dz;         
-                                    int x1=8*dx/dz+8/dz;    
-                                    for(int i2=x0+16; i2<=x1+16; ++i2){
-                                        for(int j2=y0+16; j2<=y1+16; ++j2){
-                                            if(i2<0 || i2>31 || j2<0 || j2>31){ continue; }
-                                            occ[i2*32+j2]=std::max(64+80/dz,occ[i2*32+j2]);  
+                                    int x0=(10*dx)/dz, x1=(10*(dx+14))/dz+1;
+                                    int y0=(10*dy)/dz, y1=(10*(dy+14))/dz+1; 
+                                   // printf("%i %i %i %i\n", x0,y0,x1,y1);
+                                    x0=std::max(x0,-64);
+                                    y0=std::max(y0,-64);
+                                    y1=std::min(y1,63);
+                                    x1=std::min(x1,63);
+                                    for(int i3=x0+64; i3<=x1+64; ++i3){
+                                        for(int j3=y0+64; j3<=y1+64; ++j3){
+                                            occ[i3*128+j3]=1u;
                                             occ_any=true;
                                         }
                                     }
@@ -980,8 +814,8 @@ else{
                 int ao=0;
                 if(!occ_any){
                     
-                            for(int m=0; m<constants::LIGHT_COMPONENTS; m+=1){
-                            if(FacesOffset[m%6][2]<0) continue;
+                            for(int m=1; m<constants::LIGHT_COMPONENTS; m+=6){
+                            //if(FacesOffset[m%6][2]<0) continue;
                             int Lold=Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m];
                             max_delta=std::max(max_delta,std::abs(255-(int)Lold));
                             Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m]=255u;
@@ -993,19 +827,20 @@ else{
                     
                 }
                 else{
-                    for(int bit=0; bit<1024; ++bit){
-                        ao+=std::max(0,64*!occ[bit]);
+                    for(int bit=0; bit<128*128; ++bit){
+                        ao+=(int)!occ[bit];
                     }
                     
-                    ao=(int)std::min((ao*255)/(1024*64.0f),255.0f);
+                    ao=(int)(std::min(((ao)*255.0)/(128.0*128.0),255.0));
+                    
                     //if(ao) std::cerr<<ao<<" ";  
                             
-                            for(int m=0; m<constants::LIGHT_COMPONENTS; m+=1){
-                            if(FacesOffset[m%6][2]<0) continue;                            
-                            int Lold=Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m];
-                            max_delta=std::max(max_delta,std::abs((int)ao-(int)Lold));
-                            Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m]=ao;
-                            input[((i*N3+j)*constants::WORLD_HEIGHT+z)*N2+m]=255-ao;
+                            for(int m=1; m<constants::LIGHT_COMPONENTS; m+=6){
+                            //if(FacesOffset[m%6][2]<0) continue;                            
+                                int Lold=Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m];
+                                max_delta=std::max(max_delta,std::abs((int)ao-(int)Lold));
+                                Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m]=ao;  
+                                input[((i*N3+j)*constants::WORLD_HEIGHT+z)*N2+m]=255-ao;
                             }
                         
                     
@@ -1030,26 +865,22 @@ else{
                                         int dx=FacesNormal[nm%6][0];
                                         int dy=FacesNormal[nm%6][1];
                                         int dz=FacesNormal[nm%6][2];
-                                        int z2=sun_depth[(i+dx)*N3+j+dy];
-                                        if(k<z2 && dz==0){
-                                            dz=z2-k;
-                                        }
                                         if(k+dz<0 || k+dz>=constants::WORLD_HEIGHT){
                                             continue;
                                         }
                                         int ix2=((i+dx)*N3+j+dy)*constants::WORLD_HEIGHT+k+dz;
                                         if(input[ix2*N2+constants::LIGHT_COMPONENTS]){
-                                            L1[constants::INVERSE_COMPONENTS[nm%6]+6]=L1[nm%6+6]*0.25;
+                                            L1[constants::INVERSE_COMPONENTS[nm%6]+6]=L1[nm%6+6]*0.1;
                                             L1[nm%6+6]=-L1[nm%6+6];
-                                            L1[constants::INVERSE_COMPONENTS[nm%6]]=-L1[nm%6]*0.25;
+                                            L1[constants::INVERSE_COMPONENTS[nm%6]]=L1[nm%6]*0.1;
                                             L1[nm%6]=-L1[nm%6];
                                         }   
                                         else{
                                                         float fac=constants::LPV_BIAS[nm];
                                                         int m=nm;
-                                                        L1[nm+6]+=(float)(255-input[ix2*N2+(nm)])*fac/255.0f;
+                                                        L1[nm+6]+=(float)(256.0-input[ix2*N2+(nm)])*fac/256.0f;
                                                         
-                                                        L1[nm+6]+=(float)(255-input[ix2*N2+(m+6)])/255.0f*fac;
+                                                        L1[nm+6]+=(float)(256.0-input[ix2*N2+(m+6)])/256.0f*fac;
                                                 
                                             
                                         }
@@ -1057,7 +888,7 @@ else{
                             
                             for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
                                 int Lold=(int)L0[m];
-                                int Lnew=std::min(float(Lold)+(L1[m]*255.0),255.0);
+                                int Lnew=std::max(0.1,std::min(float(Lold)+(L1[m]*254.0),254.0));
                                 Lbase[k*constants::LIGHT_COMPONENTS+m]=(uint8_t) Lnew;
                                 int delta=(int)Lnew-(int)Lold;
                                 max_delta=std::max(std::abs(delta),max_delta);
@@ -1065,20 +896,21 @@ else{
                             
                 }
                 ao=std::min(ao,255);
-                for(int k=z+1; k<zmaxneighbor; ++k){
-                    for(int i=0; i<12; ++i)
-                        Lbase[k*12+i]=(unsigned)ao;
+                for(int k=z+1; k<zmaxneighbor+1; ++k){
+                    for(int m=1; m<constants::LIGHT_COMPONENTS; m+=6){
+                        Lbase[k*constants::LIGHT_COMPONENTS+m]=(unsigned)ao;
+                    }
                 }
                 
                 int bit=((x-x0)%8)*4+(y-y0)%4;
                  
-                if(max_delta<16){     
+                if(max_delta<1){     
                  page->has_changes_in_8x4_block(x , y)[0] ^=  ((uint64_t(1u)<<uint64_t(bit)));
                 }   
                 else{
                   page->has_changes_in_8x4_block(x , y)[0] |= uint64_t(1u)<<uint64_t(32u);
                 }
-                d2xy(N-2,&d,&i2,&j2);
+                d2xy(N-D*2,&d,&i2,&j2);
                
         }   
         
@@ -1240,7 +1072,7 @@ else{
                          // frame and it takes a little while anyway
     for (int j = 0; j < num_to_update; ++j) {
       if (mesh_update_head < mesh_update_queue.size()) {
-        update_occlusion(mesh_update_queue[mesh_update_head]->x0-1,mesh_update_queue[mesh_update_head]->x0+constants::CHUNK_WIDTH+1, mesh_update_queue[mesh_update_head]->y0-2,mesh_update_queue[mesh_update_head]->y0+constants::CHUNK_WIDTH+1);
+        update_occlusion(mesh_update_queue[mesh_update_head]->x0,mesh_update_queue[mesh_update_head]->x0+constants::CHUNK_WIDTH, mesh_update_queue[mesh_update_head]->y0,mesh_update_queue[mesh_update_head]->y0+constants::CHUNK_WIDTH);
         mesh_update_queue[mesh_update_head]->update(wld);
         ++mesh_update_head;
       } else {
@@ -1253,7 +1085,7 @@ else{
                     : 2; // now do the fast update queue
       for (int j = 0; j < num_to_update; ++j) {
         if (fast_update_head < fast_update_queue.size()) {
-            update_occlusion(fast_update_queue[fast_update_head]->x0-1,fast_update_queue[fast_update_head]->x0+constants::CHUNK_WIDTH+1, fast_update_queue[fast_update_head]->y0-1,fast_update_queue[fast_update_head]->y0+constants::CHUNK_WIDTH+1);
+            update_occlusion(fast_update_queue[fast_update_head]->x0,fast_update_queue[fast_update_head]->x0+constants::CHUNK_WIDTH, fast_update_queue[fast_update_head]->y0,fast_update_queue[fast_update_head]->y0+constants::CHUNK_WIDTH);
         fast_update_queue[fast_update_head]->update(wld);
         ++fast_update_head;
       } else {  

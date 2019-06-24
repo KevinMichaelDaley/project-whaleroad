@@ -20,9 +20,11 @@ bool chunk_mesh::gen_instance(int x, int y, int z, block_t b,
   unsigned char L6=(uint8_t)Lf[5];
   uint32_t L1u = uint32_t(z2%65536) +
                 (uint32_t(xydiff) << 16uL) + (uint32_t(which%256) << 24uL);
-  uint32_t L2u = uint64_t(which/256) + (uint64_t(L1+(L2<<4uL)+(L3<<8uL)+(L4<<12uL)+(L5<<16uL)+(L6<<20uL))<<8uL);
+  uint32_t L2u = (uint32_t(L1+(L2<<8uL)+(L3<<16uL)+(L4<<24uL)));
+  uint32_t L3u = uint16_t((L5)+(L6<<16uL));
   v.L1 = L1u;
   v.L2 = L2u;
+  v.L3 = L3u;
   int N=constants::CHUNK_HEIGHT*constants::CHUNK_WIDTH*constants::CHUNK_WIDTH;
   int z0=z/constants::CHUNK_HEIGHT;
   verts[z0*N+(Nverts[z0]++)] = v; 
@@ -67,20 +69,18 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
         bt[m]=1;
         uint8_t* L1=wld->get_light(x+x0+dx,y+y0+dy,z+dz);
         ;
-        float L2=(float)L1[m]+L1[m+6]/64.0;
-        L[m]=(int)std::min(L2,255.0f);
-    }   
-    
+        L[m]=std::min(255.0,L1[m]+L1[m+6]/10.0);
+    }  
+    /*
     int Ltop=0;
-    int N=0;
     for(int m=1; m<6; ++m){
-        Ltop+=L[m];
-        N+=bt[m];
+        Ltop=std::max(Ltop,L[m]);
     }
     
     for(int m=1; m<6; ++m){
-        L[m]=std::min(127,Ltop/(2*std::max(N,1)));
+        L[m]=Ltop;
     }
+    */
     
     volume+=Nz;
     gen_instance((x), (y), (z), b2, L);
@@ -222,7 +222,7 @@ chunk_mesh::chunk_mesh() : vbo_sz(0) {
     vertexBufferCube.setData(vertices, GL::BufferUsage::StaticDraw);
     indexBufferCube.setData(indices, GL::BufferUsage::StaticDraw);
     mesh[i].setPrimitive(GL::MeshPrimitive::Triangles)
-        .addVertexBufferInstanced(vertexBuffer, 1, offset*sizeof(BVertex), L1{}, L2{})
+        .addVertexBufferInstanced(vertexBuffer, 1, offset*sizeof(BVertex), L1{}, L2{},L3{})
         .addVertexBuffer((vertexBufferCube), 0, pos{}, uv{}, f1{},f2{},f3{})
         .setIndexBuffer((indexBufferCube), 0, GL::MeshIndexType::UnsignedByte)
         .setInstanceCount(0)

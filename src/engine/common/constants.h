@@ -6,7 +6,7 @@ constexpr const  int MAX_IP_HEADER_SIZE = 60;
 constexpr const  int UDP_HEADER_SIZE = 8;
 constexpr const  int MAX_DATAGRAM_SIZE =
     UDP_MTU - MAX_IP_HEADER_SIZE - UDP_HEADER_SIZE;
-constexpr const  int CHUNK_WIDTH = 8;
+constexpr const  int CHUNK_WIDTH = 16;
 constexpr const  int CHUNK_HEIGHT = 32;
 constexpr const  int MAX_RESIDENT_PAGES=160;
 constexpr const  int PAGE_DIM=128;       

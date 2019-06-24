@@ -128,7 +128,20 @@ public:
     wv_->update_center(v);
   }
   void spawn() {
-
+    camera cam;
+    cam.look_at({0,0,0},{0,0,1},{0,1,0});
+    cam.set_perspective(M_PI/4.0,1.0,0.1,10.0);
+    Matrix4 viewproj=cam.projection*cam.view;
+    printf("[");
+    for(int i=0; i<4; ++i){
+        printf("[");
+        for(int j=0; j<4; ++j){
+            printf("%f",viewproj[j][i]);
+            if(j<3) printf(",");
+        }
+        printf("]\n");
+    }
+    printf("]\n\n\n");
     scene_.create_default_player(player_name, w_);
 
     //console.load_settings();

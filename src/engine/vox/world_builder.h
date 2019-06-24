@@ -1,5 +1,6 @@
 #pragma once
 #include "block.h"
+#include "res/hmap.h"
 #include "common/constants.h"
 #include "common/stream.h"
 #include <Magnum/Magnum.h>
@@ -7,7 +8,7 @@
 #include <sys/mman.h>
 #include <dlfcn.h>
 using namespace Magnum;
-#define WORLD_SCALE 80
+#define WORLD_SCALE 20
 #define WORLD_OFFSET 20
 class world_builder {
 private:
@@ -48,64 +49,71 @@ public:
     typedef block_t (*generator)(int, int, int,     block_t*, int*);
 private:
     generator generate;
-    float height[(constants::PAGE_DIM+20)*(constants::PAGE_DIM+20)];
-    int voronoi_x[1024];
 public:
-
-    float gen_height(int x, int y, int r=50){
-        
-        if(r==0){
-            float hmin=100000;
-            for(int i=0; i<20; ++i){
-                int x2=(voronoi_x[i]%(155*155))%155+1024;
-                int y2=(voronoi_x[i]%(155*155))/155+1024;
-                hmin=std::min(hmin,(float) ((x2-x)*(x2-x)+(y2-y)*(y2-y))/(355.0f*355.0f));
-            }   
-            return 0.4-std::min(0.3f,hmin);
-        }       
-        else{
-            float havg=height[(x-x0+10)*(constants::PAGE_DIM+20)+y-y0+10];
-            float hdiff=0.0;
-            int ix1=(x+10-x0)*(constants::PAGE_DIM+20)+y+10-y0;
-            for(int i=-1; i<=1; ++i){
-                
-                if(x-x0+i<-10 || x-x0+i >= constants::PAGE_DIM+10) continue;
-                for(int j=-1; j<=1; ++j){
-                    if(!i && !j) continue;
-                    if(y-y0+j<-10 || y-y0+j >= constants::PAGE_DIM+10) continue;
-                    int ix2=(i)*(constants::PAGE_DIM+20)+j;
-                    hdiff+=height[ix1+ix2]-height[ix1];
+    float gen_pattern(int x, int y){
+        float height=0.0;
+        int ix=0;
+        //for each power of 2, generate a random 4x4 pattern.
+        //interpolate bilinearly and add octaves together.
+        for(int r=29; r>0; r-=1){
+            int xd=x>>r;
+            int yd=y>>r;
+            float s=(x%(1<<(r+1)))/float((1<<(r+1)));
+            float t=(y%(1<<(r+1)))/float((1<<(r+1)));
+            //printf("%f %f\n", s,t);
+            int bit=(xd&1)*2+(yd&1);
+            int pattern[3][3]={0};
+            for(int dx=0; dx<=1; dx+=1){
+                for(int dy=0; dy<=1; dy+=1){
+                    int x2=xd+dx;
+                    int y2=yd+dy;
+                    int bit=(x2&1)*2+(y2&1);
+                    //seed with position hash (to preserve spatial coherence) and do lcg once
+                    pattern[dx][dy]=!!((((x2/2)*65539+(y2/2))*48271)&(1<<bit));
                 }
             }
-            return havg+(hdiff)/20.0;
-        } 
-       
+            float off_interp0=(1-s)*pattern[0][0]+s*pattern[1][0];
+            float off_interp2=(1-s)*pattern[0][1]+s*pattern[1][1];
+            float off_interp = 0.5*((1-t)*(off_interp0)+(t)*(off_interp2));
+            height+=(off_interp)/exp(0.18*(r-6.5)*(r-6.5))  ;
+            ++ix;       
+        }
+       // printf("%f ", 20.0*height+20.0);
+        return height;
+        
     }
+    float gen_height(int x, int y){
+        return gen_pattern(x+x0,y+y0);
+    } 
+       
+    
     void get_generated_run(int x, int y, int z, block_t* b, int* n){
+        
         if(method.compare("default")==0){
-            if(z<(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*WORLD_SCALE+WORLD_OFFSET)-1){
-                b[0]=STONE; n[0]=(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*WORLD_SCALE+WORLD_OFFSET)-1-z;
-                bool neg=true;
+            
+            int h=std::max(0,std::min(constants::WORLD_HEIGHT-64,(int)(gen_height(x,y)*WORLD_SCALE+WORLD_OFFSET)));
+            
+            if(z<(int)(h)){
+                b[0]=STONE; n[0]=h-1-z;
+                int min_neighbor_height=h;
                 for(int i=-1; i<=1; ++i){ 
                     for(int j=-1; j<=1; ++j){ 
-                    if(int(height[(x+10+i)*(constants::PAGE_DIM+20)+y+10+j]*WORLD_SCALE+WORLD_OFFSET)<z+1){
-                        neg=false;
-                    }
-                    if(int(height[(x+10+i)*(constants::PAGE_DIM+20)+y+10+j]*WORLD_SCALE+WORLD_OFFSET)<z+1){
-                        neg=false;
-                     }
+                       if(!i && !j) continue; 
+            
+                        int h2=std::max(0,std::min(constants::WORLD_HEIGHT-100,(int)(gen_height(x+i,y+j)*WORLD_SCALE+WORLD_OFFSET)));
+                        min_neighbor_height=std::min(min_neighbor_height,h2);
                     }
                 }
-                if(neg){
+                if(min_neighbor_height>z){
                     b[0]=-STONE;
+                    n[0]=std::max(1,min_neighbor_height-z-1);
+                }
+                else{
+                    b[0]=STONE; n[0]=h-z;
                 }
             }
-            else if(z<(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*WORLD_SCALE+WORLD_OFFSET)){
                 
-                b[0]=STONE; n[0]=1;
-            }
-                
-            else if(z==(int)(height[(x+10)*(constants::PAGE_DIM+20)+y+10]*WORLD_SCALE+WORLD_OFFSET)){
+            else if(z==(int)h){
                 b[0]=GRASS; n[0]=1;
             }
             else{
@@ -121,9 +129,6 @@ public:
     }
     worldgen_stream(std::string m, stream_mode md, int ox, int oy, int oz){
         srand(0);
-        for(int i=0; i<1024; ++i){
-            voronoi_x[i]=rand();
-        }
         method=m;
         mode=md;
         so=nullptr;
@@ -132,16 +137,6 @@ public:
         y0=oy;
         k=0;
         generate=nullptr;
-        
-                for(int t=0; t<3; ++t){
-        for(int i=-10; i<constants::PAGE_DIM+10; ++i){
-            
-            for(int j=-10; j<constants::PAGE_DIM+10; ++j){
-                    height[(i+10)*(constants::PAGE_DIM+20)+j+10]=gen_height(i+(int)x0,j+(int)y0,t);
-             
-            }
-        }   
-                }
         if(method.compare("default")){
             so=dlopen(("../../src/engine/proc/terrain/gen_"+method+".so").c_str(), RTLD_NOW);
             generate=(generator) dlsym(so, "generate_run");

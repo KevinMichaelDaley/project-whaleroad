@@ -792,8 +792,8 @@ else{
                                     //rasterize the block bottom face
                                     //using integer arithmetic at 128x128 res
                                     //add a fudge factor of 1 to the block width to account for the side faces.
-                                    int x0=(1225*64*(dx-1))/(dz), x1=(1225*64*(dy+2))/(dz); 
-                                    int y0=(1225*64*(dy-1))/(dz), y1=(1225*64*(dy+2))/(dz); 
+                                    int x0=(146*64*(2*dx-1))/(2*dz), x1=(146*64*(2*dy+3))/(2*dz); 
+                                    int y0=(146*64*(2*dy-1))/(2*dz), y1=(146*64*(2*dy+3))/(2*dz); 
                                    // printf("%i %i %i %i\n", x0,y0,x1,y1);
                                     x0=std::max(x0,-64);
                                     y0=std::max(y0,-64);
@@ -872,11 +872,11 @@ else{
                                         }
                                         int ix2=((i+dx)*N3+j+dy)*constants::WORLD_HEIGHT+k+dz;
                                         if(input[ix2*N2+constants::LIGHT_COMPONENTS]){
-                                            L1[constants::INVERSE_COMPONENTS[nm%6]+6]=L1[nm%6+6]*0.1;
+                                            L1[constants::INVERSE_COMPONENTS[nm%6]+6]=L1[nm%6+6]*0.05;
                                             L1[nm%6+6]=-L1[nm%6+6];
-                                            L1[constants::INVERSE_COMPONENTS[nm%6]]=L1[nm%6]*0.1;
+                                            L1[constants::INVERSE_COMPONENTS[nm%6]+6]+=L1[nm%6]*0.05;
                                             L1[nm%6]=-L1[nm%6];
-                                        }   
+                                        }       
                                         else{
                                                         float fac=constants::LPV_BIAS[nm];
                                                         int m=nm;

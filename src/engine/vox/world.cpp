@@ -644,8 +644,25 @@ else{
 }
 
 }
-
-
+inline uint8_t sqrt8(uint8_t x){
+    uint8_t y=0;
+    y+=(x>=1);
+    y+=(x>=4);
+    y+=(x>=9);
+    y+=(x>=16);
+    y+=(x>=25);
+    y+=(x>=36);
+    y+=(x>=49);
+    y+=(x>=64);
+    y+=(x>=81);
+    y+=(x>=100);
+    y+=(x>=121);
+    y+=(x>=144);
+    y+=(x>=169);
+    y+=(x>=196);
+    y+=(x>=225);
+    return y;
+}
   void world_view::update_occlusion(int x0,int x1, int y0, int y1, int D) {
         x0-=D;
         y0-=D;
@@ -729,7 +746,7 @@ else{
                         }
                         input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+constants::LIGHT_COMPONENTS]=(block_is_opaque(blk))?255:0;
                         input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+1+constants::LIGHT_COMPONENTS]=(int)block_emissive_strength(blk);
-                        input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+2+constants::LIGHT_COMPONENTS]=(b2[k]>0)?1:0;   
+                        input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+2+constants::LIGHT_COMPONENTS]=std::max((int)skip_invisible_array[k],0);   
                       
                         if(!blk){   
                             break;
@@ -769,84 +786,111 @@ else{
                 int z=wld->get_z(x,y,skip_invisible_array,page);
                 const block_t* b2=&(barray[(((x-sx)*(int)dim)+(y-sy))*(int) constants::WORLD_HEIGHT]);
                 
-                uint8_t occ[128*128]={0};
+                constexpr int R=8;
+                uint8_t occ[R*R*4]={0};
                 int zmaxneighbor=z;
                 bool occ_any=false;
+                    
+                int16_t* ip0=&input[(((i)*N3+j)*constants::WORLD_HEIGHT)*N2+constants::LIGHT_COMPONENTS];   
                 if(i>=D && i<N-D){
                     if(j>=D && j<N-D){
                         for(int dx=-D; dx<=D; ++dx){
                             for(int dy=-D; dy<=D; ++dy){
                                 int z1=sun_depth[(i+dx)*N3+(j+dy)];
-                                int dzmax=z1-z;
-                                int zmaxneighbor=std::max(z1,zmaxneighbor);
-                                if(dzmax<=0){
-                                    continue;
-                                 }
-                                if(!dx && !dy) continue;
-                                int16_t* ip=&input[(((i+dx)*N3+j+dy)*constants::WORLD_HEIGHT+z)*N2];   
-                                for(int dz=1; dz<=std::min(dzmax, constants::WORLD_HEIGHT-1-z); ++dz){
-                                    //if(!ip[(dz-1)*N2+constants::LIGHT_COMPONENTS]){
-                                     
-                                        //continue;
-                                    //}
-                                    //rasterize the block bottom face
-                                    //using integer arithmetic at 128x128 res
-                                    //add a fudge factor of 1 to the block width to account for the side faces.
-                                    int x0=(146*64*(2*dx-1))/(2*dz), x1=(146*64*(2*dy+3))/(2*dz); 
-                                    int y0=(146*64*(2*dy-1))/(2*dz), y1=(146*64*(2*dy+3))/(2*dz); 
-                                   // printf("%i %i %i %i\n", x0,y0,x1,y1);
-                                    x0=std::max(x0,-64);
-                                    y0=std::max(y0,-64);
-                                    y1=std::min(y1,63);
-                                    x1=std::min(x1,63);
-                                    for(int i3=x0+64; i3<=x1+64; ++i3){
-                                        for(int j3=y0+64; j3<=y1+64; ++j3){
-                                            occ[i3*128+j3]=std::max(occ[i3*128+j3],uint8_t(128-(100*dz-2)/dz));
-                                            occ_any=true;
+                                zmaxneighbor=std::max(z1,zmaxneighbor);
+                                
+                                int16_t* ip=&input[(((i+dx)*N3+j+dy)*constants::WORLD_HEIGHT)*N2+constants::LIGHT_COMPONENTS]; 
+                                //int ixz=0;
+                                //for(int k=0; k<z; k+=std::min(z,std::max((int)(ip0[2+N2*k]),1))){
+                                    //if(k+std::max((int)ip0[2+N2*k],1)<z) continue;
+                                    //if(!k) continue;
+                                    //if(k>=z-1) ixz=1;
+                                    int k=z;
+                                    for(int k2=0; k2<z1; k2+=std::max((int)(ip[2+N2*k2]),1)){
+                                        int dz=k2-z;
+                                        if(dz<0) continue;
+                                        if(ip[k*N2+2]+k>=constants::WORLD_HEIGHT-2)  break;
+                                        //if(ip[k2*N2+2]) break;
+                                            //if(!ip[(dz-1)*N2+constants::LIGHT_COMPONENTS] && dz==1){
+                                            //int R=R0+R0*ixz;
+                                            // continue;
+                                            //}   
+                                            //rasterize the block bottom face
+                                            //using integer arithmetic at 128x128 res
+                                            //add a fudge factor of 1/2 to the block width to account for the side faces.
+                                            int x00=(146*R*(dx-1))/(dz+1), x10=(146*R*(dy+2))/(dz+1); 
+                                            int y00=(146*R*(dy-1))/(dz+1), y10=(146*R*(dy+2))/(dz+1); 
+                                        // printf("%i %i %i %i\n", x0,y0,x1,y1);
+                                            int x0=std::max(x00,-R)+R;
+                                            int y0=std::max(y00,-R)+R;
+                                            int y1=std::min(y10,R-1)+R;
+                                            int x1=std::min(x10,R-1)+R;
+                                            int sx=x1-x0, sy=y1-y0;
+                                            uint8_t dzw=std::min(sqrt8(dz*dz+dx*dx+dy*dy)*8+128,255);
+                                            dzw=~dzw;
+                                            for(int i3=x0; i3<=x1; ++i3){   
+                                                for(int j3=y0; j3<=y1; ++j3){
+                                                    int occ_index=(i3*R*2+j3);
+                                                    occ[occ_index]=std::max(occ[occ_index],dzw);
+                                                    occ_any=true;
+                                                }
+                                            }
+                                            
+                                            if(!dx && !dy){//if we are at dx=0,dy=0 the bottom face occludes all the ones above it!
+                                                break;
+                                            }
                                         }
-                                    }
-                                }
+                                       // ++ixz;
+                                    //}
                             }
                         }
                     }
                 }
-                
-                
                 int ao=0;
-                if(!occ_any){
+                //int ixz=0;
+                //for(int k=0; k<z+1; k+=std::min(z,std::max((int)(ip0[2+N2*k]),1))){
                     
-                            for(int m=1; m<constants::LIGHT_COMPONENTS; m+=6){
-                            //if(FacesOffset[m%6][2]<0) continue;
-                            int Lold=Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m];
-                            max_delta=std::max(max_delta,std::abs(255-(int)Lold));
-                            Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m]=255u;
-                            
-                            input[((i*N3+j)*constants::WORLD_HEIGHT+z)*N2+m]=0u;
-                            }
-                            ao=255;
-                     
-                    
-                }
-                else{
-                    for(int bit=0; bit<128*128; ++bit){
-                        int dz=128-occ[bit];
-                        ao+=dz+dz;
+                    //if(k+ip0[2+N2*k]<z) continue;
+                    //if(!k) continue;
+                    //if(k>=z-1) ixz=1;
+                    int k=z;
+                    int ixz=1;
+                    ao=0;
+                    if(!occ_any){
+                        
+                                for(int m=1; m<constants::LIGHT_COMPONENTS; m+=6){
+                                //if(FacesOffset[m%6][2]<0) continue;
+                                    int Lold=Lbase[(k+1)*constants::LIGHT_COMPONENTS+m];
+                                    max_delta=std::max(max_delta,std::abs(255-(int)Lold));
+                                    Lbase[(k)*constants::LIGHT_COMPONENTS+m]=255u;
+                                    
+                                    input[((i*N3+j)*constants::WORLD_HEIGHT+k+1)*N2+m]=0u;
+                                }
+                                ao=255;
+                           //std::cerr<<k<<" "<<ao<<" \n";  
+                        
                     }
+                    else{
                         
-                    ao=(int)(std::min(((ao))/(128.0*128.0),255.0));
-                    
-                    //if(ao) std::cerr<<ao<<" ";  
+                        
+                        for(int bit=0; bit<R*R*4; ++bit){
+                            uint8_t dzw=~occ[bit];
+                            ao+=dzw;
+                        }
+                        ao=std::min(((ao))/(R*R*4),255);
+                        
+                                        
+                                for(int m=1; m<constants::LIGHT_COMPONENTS; m+=6){
+                                //if(FacesOffset[m%6][2]<0) continue;                            
+                                    int Lold=Lbase[(k)*constants::LIGHT_COMPONENTS+m];
+                                    max_delta=std::max(max_delta,std::abs((int)ao-(int)Lold));
+                                    Lbase[(k)*constants::LIGHT_COMPONENTS+m]=ao;  
+                                    input[((i*N3+j)*constants::WORLD_HEIGHT+k+1)*N2+m]=255-ao;
+                                }
+                    }
                             
-                            for(int m=1; m<constants::LIGHT_COMPONENTS; m+=6){
-                            //if(FacesOffset[m%6][2]<0) continue;                            
-                                int Lold=Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m];
-                                max_delta=std::max(max_delta,std::abs((int)ao-(int)Lold));
-                                Lbase[std::min(z,constants::WORLD_HEIGHT-1)*constants::LIGHT_COMPONENTS+m]=ao;  
-                                input[((i*N3+j)*constants::WORLD_HEIGHT+z)*N2+m]=255-ao;
-                            }
-                        
-                    
-                }
+                   // ++ixz;
+                //}
                 for(int k=0; k<=z; k+=std::max((int)skip_invisible_array[k],1)){
                     
                             float L1[constants::LIGHT_COMPONENTS];

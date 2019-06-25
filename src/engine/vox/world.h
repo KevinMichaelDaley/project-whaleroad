@@ -135,7 +135,7 @@ public:
                                     }
   void update_center(Vector3 player_position) ;
   void update_occlusion(int subradius) ;
-  void update_occlusion(int x0, int x1, int y0, int y1,int D=3) ;
+  void update_occlusion(int x0, int x1, int y0, int y1,int D=2) ;
 
   int nearest_multiple(int x, int base) ;
   void update_visible_list(

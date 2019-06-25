@@ -67,9 +67,9 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
         bt[m]=1;
         uint8_t* L1=wld->get_light(x+x0+dx,y+y0+dy,z+dz);
         ;
-        L[m]=std::min(255.0,float(L1[m])+float(L1[m+6])/6.0);
+        L[m]=std::min(255,int(L1[m])+int(L1[m+6])/15);
         //printf("%i", L[1]);
-    }   
+    }       
     /*  
     int Ltop=0;
     for(int m=1; m<6; ++m){

@@ -818,8 +818,8 @@ inline uint8_t sqrt8(uint8_t x){
                                             //rasterize the block bottom face
                                             //using integer arithmetic at 128x128 res
                                             //add a fudge factor of 1/2 to the block width to account for the side faces.
-                                            int x00=(146*R*(dx-1))/(dz+1), x10=(146*R*(dy+2))/(dz+1); 
-                                            int y00=(146*R*(dy-1))/(dz+1), y10=(146*R*(dy+2))/(dz+1); 
+                                            int x00=(146*R*(dx-1))/(dz+1), x10=(146*R*(dy+1))/(dz+1); 
+                                            int y00=(146*R*(dy-1))/(dz+1), y10=(146*R*(dy+1))/(dz+1); 
                                         // printf("%i %i %i %i\n", x0,y0,x1,y1);
                                             int x0=std::max(x00,-R)+R;
                                             int y0=std::max(y00,-R)+R;

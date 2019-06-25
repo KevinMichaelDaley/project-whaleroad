@@ -47,42 +47,49 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
     if (!block_is_visible(b2)) {
       continue;
     }
-    int L[12]={0x0};
-    int bt[6]={0x0};
-    for(int m=0; m<6; ++m){
-        
-        int dx=FacesNormal[m%6][0];
-        int dy=FacesNormal[m%6][1];
-        int dz=FacesNormal[m%6][2];
-        if(z+dz<0 || z+dz>constants::WORLD_HEIGHT-1){
-            L[m%6]=255;
+    int Lsum[6]={0x0}, N[6]={0x0};
+    for(int dx1=-2; dx1<=2; ++dx1){
+        for(int dy1=-2; dy1<=2; ++dy1){
+            
+                int dz1=0;
+                for(int m=0; m<6; ++m){
+                    
+                    int dx=FacesNormal[m%6][0];
+                    int dy=FacesNormal[m%6][1];
+                    int dz=FacesNormal[m%6][2];
+                    if(z+dz<0 || z+dz>constants::WORLD_HEIGHT-1){
+                        Lsum[m%6]+=255;
+                        N[m]+=1;
+                        continue;
+                    }
+                    block_t b2=wld->get_voxel(x+x0+dx+dx1,y+y0+dy+dy1,z+dz+dz1);
+                    if(b2>1){
+                        continue;
+                    }
+                    if(b2<0){
+                        continue;
+                    }
+                    uint8_t* L1=wld->get_light(x+x0+dx+dx1,y+y0+dy+dy1,z+dz+dz1);
+                    ;
+                    Lsum[m]+=std::min(255,int(L1[m])+int(L1[m+6])/8);
+                    N[m]+=1;
+                    //printf("%i", L[1]);
+                
+                }
         }
-        block_t b2=wld->get_voxel(x+x0+dx,y+y0+dy,z+dz);
-        if(b2>1){
-            continue;
-        }
-        if(b2<0){
-            continue;
-        }
-        bt[m]=1;
-        uint8_t* L1=wld->get_light(x+x0+dx,y+y0+dy,z+dz);
-        ;
-        L[m]=std::min(255,int(L1[m])+int(L1[m+6])/15);
-        //printf("%i", L[1]);
-    }       
+    }
     /*  
     int Ltop=0;
     for(int m=1; m<6; ++m){
         Ltop=std::max(Ltop,L[m]);
     }
-    
-    for(int m=1; m<6; ++m){
-        L[m]=Ltop;
-    }
     */
+    for(int m=0; m<6; ++m){
+        Lsum[m]/=std::max(N[m],1);
+    }
     
     volume+=Nz;
-    gen_instance((x), (y), (z), b2, L);
+    gen_instance((x), (y), (z), b2, Lsum);
   }
 }
 
@@ -170,7 +177,7 @@ chunk_mesh::chunk_mesh() : vbo_sz(0) {
         int vz=(FacesOffset[face][vert][2]>0);
         int vmask=1<<(int)(vx*4+vy*2+vz);
         for (int face1 = 0; face1 < 6; ++face1) {
-            if(face1!=face && (mask[face1]&vmask!=0)){
+            if(face1!=face && ((mask[face1]&vmask)==vmask)){
                 face2[face][vert]=face1;
                 break;
             }
@@ -185,7 +192,7 @@ chunk_mesh::chunk_mesh() : vbo_sz(0) {
         int vz=(FacesOffset[face][vert][2]>0);
         int vmask=1<<(int)(vx*4+vy*2+vz);
         for (int face1 = 0; face1 < 6; ++face1) {
-            if(face1!=face && face1!=face2[face][vert] && (mask[face1]&vmask!=0)){
+            if(face1!=face && face1!=face2[face][vert] && ((mask[face1]&vmask)==vmask)){
                 face3[face][vert]=face1;
                 break;
             }
@@ -197,14 +204,14 @@ chunk_mesh::chunk_mesh() : vbo_sz(0) {
     for (int vert = 0; vert < 4; ++vert) {
         
       assert(face2[face][vert]>=0 && face3[face][vert]>=0);
-          
+      printf("%i %i\n", face2[face][vert], face3[face][vert]);
       vertices[max_vertex++] = {(float)FacesOffset[face][vert][0],
                                 (float)FacesOffset[face][vert][1],
                                 (float)FacesOffset[face][vert][2],
                                 (float)FacesUV[vert][0] / 256.0f,
                                 (float)FacesUV[vert][1] / 3.0f +
                                     whichface[face] / 3.0f,
-                               (unsigned)face,(unsigned)face2[face][vert],(unsigned)face3[face][vert]};
+                               (unsigned)face,std::max((unsigned)face2[face][vert],1u),std::max((unsigned)face3[face][vert],1u)};
     }
     indices[max_index++] = max_vertex - 3;
     indices[max_index++] = max_vertex - 1;

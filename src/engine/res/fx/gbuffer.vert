@@ -20,6 +20,11 @@
 				int L1x=int((L2>>(6u*(face_index)))%64u)*int(face_index<5u);
 				L1x+=int((L1>>21u)&0xffu)*int(face_index==5u);
 				
+				int L1y=int((L2>>(6u*(face_neighbor1)))%64u)*int(face_neighbor1<5u);
+				L1y+=int((L1>>21u)&0xffu)*int(face_neighbor1==5u);
+				
+				int L1z=int((L2>>(6u*(face_neighbor2)))%64u)*int(face_neighbor2<5u);
+				L1z+=int((L1>>21u)&0xffu)*int(face_neighbor2==5u);
 				/*int L1y=(int(L2>>8u)>>(4*int(face_neighbor1)))%16;
 				int L1z=(int(L2>>8u)>>(4*int(face_neighbor2)))%16;*/
 				uint xydiff=(uint(L1)>>5u)&0xffu;
@@ -30,7 +35,7 @@
 				
 				vec4 vpos=projection*view*vec4(position.xyz,1.0);
 
-				float Lr=((L1x)/64.0)   ;
+				float Lr=(L1y+L1x+L1z)/96.0;
                 vec2 coord=uv+vec2(float(which%256u)/256.0,0.0);
                 gbuffer.x=coord.x;
                 gbuffer.y=coord.y;

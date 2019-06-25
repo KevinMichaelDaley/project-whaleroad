@@ -464,8 +464,9 @@ public:
                 
                     if(!vis[ixc] || (frame++)==0 || q[ixc]->result<bool>() || (frame)%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT)==z0){
                         vis[ixc]=true;
-                        q[ixc]->begin();
+                        gbuffer.uniform("z0",z0*constants::CHUNK_HEIGHT);
                         chunk->copy_to_gpu(z0);
+                        q[ixc]->begin();
                         chunk->draw(&gbuffer,z0);
                         q[ixc]->end();
                     }

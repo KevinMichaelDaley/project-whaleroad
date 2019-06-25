@@ -18,13 +18,11 @@ bool chunk_mesh::gen_instance(int x, int y, int z, block_t b,
   unsigned char L4=(uint8_t)Lf[3];
   unsigned char L5=(uint8_t)Lf[4];
   unsigned char L6=(uint8_t)Lf[5];
-  uint32_t L1u = uint32_t(z2%65536) +
-                (uint32_t(xydiff) << 16uL) + (uint32_t(which%256) << 24uL);
-  uint32_t L2u = (uint32_t(L1+(L2<<8uL)+(L3<<16uL)+(L4<<24uL)));
-  uint32_t L3u = uint16_t((L5)+(L6<<16uL));
+  uint32_t L1u = uint32_t(z2%constants::CHUNK_HEIGHT) +
+                (uint32_t(xydiff) << 5uL) + (uint32_t(which%8192) << 13uL)+((L6/4)<<21uL);
+  uint32_t L2u = (uint32_t(L1/4+((L2/4)<<6uL)+((L3/4)<<12uL)+((L4/4)<<18uL)+((L5/4)<<24uL)));
   v.L1 = L1u;
   v.L2 = L2u;
-  v.L3 = L3u;
   int N=constants::CHUNK_HEIGHT*constants::CHUNK_WIDTH*constants::CHUNK_WIDTH;
   int z0=z/constants::CHUNK_HEIGHT;
   verts[z0*N+(Nverts[z0]++)] = v; 
@@ -222,7 +220,7 @@ chunk_mesh::chunk_mesh() : vbo_sz(0) {
     vertexBufferCube.setData(vertices, GL::BufferUsage::StaticDraw);
     indexBufferCube.setData(indices, GL::BufferUsage::StaticDraw);
     mesh[i].setPrimitive(GL::MeshPrimitive::Triangles)
-        .addVertexBufferInstanced(vertexBuffer, 1, offset*sizeof(BVertex), L1{}, L2{},L3{})
+        .addVertexBufferInstanced(vertexBuffer, 1, offset*sizeof(BVertex), L1{}, L2{})
         .addVertexBuffer((vertexBufferCube), 0, pos{}, uv{}, f1{},f2{},f3{})
         .setIndexBuffer((indexBufferCube), 0, GL::MeshIndexType::UnsignedByte)
         .setInstanceCount(0)

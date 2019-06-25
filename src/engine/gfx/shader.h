@@ -251,7 +251,7 @@ public:
         Vector3 night_color= {0.1,0.0,0.06};
         
         Vector3 dawn_color=Vector3{0.4,0.5,0.6};
-        Vector3 dusk_color=Vector3{0.5,0.4,0.45};
+        Vector3 dusk_color=Vector3{0.4,0.4,0.45};
         
         if(theta<0.5){
             return Math::lerp(dusk_color,night_color,theta*theta*4.0);
@@ -263,7 +263,7 @@ public:
     Vector3 get_sky_color_day(float theta,int day_index){
         Vector3 dawn_color=Vector3{0.4,0.5,0.6};
         Vector3 day_color=Vector3{0.4,0.5,0.9};
-        Vector3 dusk_color=Vector3{0.5,0.4,0.45};
+        Vector3 dusk_color=Vector3{0.4,0.4,0.45};
         
         if(theta<0.5){
             return Math::lerp(dawn_color,day_color,theta*theta*4.0);

@@ -71,7 +71,7 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
                     }
                     uint8_t* L1=wld->get_light(x+x0+dx+dx1,y+y0+dy+dy1,z+dz+dz1);
                     ;
-                    Lsum[m]+=std::min(255,int(L1[m])+int(L1[m+6])/8);
+                    Lsum[m]+=std::min(255,int(L1[m])+int(L1[m+6])/9);
                     N[m]+=1;
                     //printf("%i", L[1]);
                 

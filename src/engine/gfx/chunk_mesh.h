@@ -98,10 +98,10 @@ public:
   bool is_visible(camera cam, int z0) {
     return (Nverts[z0] > 0) && cam.frustum_cull_box(Range3D{{x0,y0,z0*constants::CHUNK_HEIGHT},{x0+constants::CHUNK_WIDTH,y0+constants::CHUNK_WIDTH, z0*constants::CHUNK_HEIGHT+constants::CHUNK_HEIGHT}});
   }
-  float min_depth(camera cam){
+  float min_depth(camera cam,int z0){
       float zmin=1000000000;
-      Vector4 corner1=Vector4{constants::CHUNK_WIDTH+x0, constants::CHUNK_WIDTH+y0, constants::WORLD_HEIGHT,1.0};
-      Vector4 corner2=Vector4{x0,y0,0,1.0};
+      Vector4 corner1=Vector4{constants::CHUNK_WIDTH+x0, constants::CHUNK_WIDTH+y0, (z0+1)*constants::CHUNK_HEIGHT,1.0};
+      Vector4 corner2=Vector4{x0,y0,z0*constants::CHUNK_HEIGHT,1.0};
       Vector4 corner_p=((cam.projection*cam.view)*corner1);
       zmin=std::min(zmin,corner_p.z()/corner_p.w()*0.5f+0.5f);
       corner_p=((cam.projection*cam.view)*corner2);

@@ -426,7 +426,7 @@ public:
         
         camera cam=player_->get_cam();
         Matrix4 viewproj=cam.projection*cam.view;
-        camera sun_cam=get_sun_cam(0,SHADOW_CASCADES);
+        //camera sun_cam=get_sun_cam(0,SHADOW_CASCADES);
         gbuffer.uniform("view", cam.view);
         gbuffer.uniform("projection", cam.projection);   
         
@@ -439,52 +439,53 @@ public:
         GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
         std::array<int,4096> indices={0};
         std::array<float,4096> min_depth={0.0};
-        for(int i=0,e=all_chunks.size(); i<e; ++i){
+        for(int i=0,e=all_chunks.size()*(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT); i<e; ++i){
+            int j=i/(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
+            int z0=i%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
             indices[i]=i;
-            float z=all_chunks[i]->min_depth(cam);
+            float z=all_chunks[j]->min_depth(cam,z0);
             min_depth[i]=z;            
         }
         
                     
         passthrough.uniform("transform", viewproj);  
-        std::sort(indices.begin(), indices.begin()+all_chunks.size(), [min_depth](int i, int j){return min_depth[i]<min_depth[j];});
-        for(int j=0,e=all_chunks.size(); j<e; ++j){
-            int i=indices[j];
-            chunk_mesh* chunk=all_chunks[i];
+        std::sort(indices.begin(), indices.begin()+all_chunks.size()*(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT), [min_depth](int i, int j){return min_depth[i]<min_depth[j];});
+        for(int j=0,e=all_chunks.size()*(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT); j<e; ++j){
+                int i=indices[j]/(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
+                int z0=indices[j]%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
+                chunk_mesh* chunk=all_chunks[i];
             
-            if(chunk==nullptr) continue;
+                if(chunk==nullptr) continue;
             
-            gbuffer.uniform("x0", chunk->x0);
-            gbuffer.uniform("y0", chunk->y0);
-            passthrough.uniform("x0",chunk->x0);
-            passthrough.uniform("y0",chunk->y0);
-            for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
-                int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
+                gbuffer.uniform("x0", chunk->x0);
+                gbuffer.uniform("y0", chunk->y0);
+                passthrough.uniform("x0",chunk->x0);
+                passthrough.uniform("y0",chunk->y0);
+                int ixc=indices[j];
                 if(!chunk->is_visible(cam,z0)){ vis[ixc]=false; continue;}
                 
-                    if(!vis[ixc] || (frame++)==0 || q[ixc]->result<bool>() || (frame)%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT)==z0){
-                        vis[ixc]=true;
-                        gbuffer.uniform("z0",z0*constants::CHUNK_HEIGHT);
-                        chunk->copy_to_gpu(z0);
-                        q[ixc]->begin();
-                        chunk->draw(&gbuffer,z0);
-                        q[ixc]->end();
-                    }
-                    else{
-                        glColorMask(false,false,false,false);
-                        glDepthMask(false);
-                        glStencilMask(0);
-                        
-                        
-                        q[ixc]->begin();
-                        passthrough.uniform("z0",z0*constants::CHUNK_HEIGHT);
-                        fullchunk.draw(passthrough);
-                        q[ixc]->end();
-                        glColorMask(true,true,true,true);
-                        glDepthMask(true);
-                        glStencilMask(~0);
-                    }
-            }
+                if(!vis[ixc] || (frame++)==0 || q[ixc]->result<bool>() || (frame)%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT)==z0){
+                    vis[ixc]=true;
+                    gbuffer.uniform("z0",z0*constants::CHUNK_HEIGHT);
+                    chunk->copy_to_gpu(z0);
+                    q[ixc]->begin();
+                    chunk->draw(&gbuffer,z0);
+                    q[ixc]->end();
+                }   
+                else{
+                    glColorMask(false,false,false,false);
+                    glDepthMask(false);
+                    glStencilMask(0);
+                    
+                    
+                    q[ixc]->begin();
+                    passthrough.uniform("z0",z0*constants::CHUNK_HEIGHT);
+                    fullchunk.draw(passthrough);
+                    q[ixc]->end();
+                    glColorMask(true,true,true,true);
+                    glDepthMask(true);
+                    glStencilMask(~0);
+                }
          }
          /*
             //GL::Renderer::enable(GL::Renderer::Feature::DepthTest);

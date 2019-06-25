@@ -96,7 +96,7 @@ public:
     CORRADE_INTERNAL_ASSERT(image);
     atlas.setWrapping(GL::SamplerWrapping::ClampToEdge)
         .setMagnificationFilter(GL::SamplerFilter::Nearest)
-        .setMinificationFilter(GL::SamplerFilter::Linear)
+        .setMinificationFilter(GL::SamplerFilter::Nearest)
         .setStorage(1, GL::TextureFormat::RGB8, image->size())  
         .setSubImage(0, {}, *image)
         .generateMipmap();  

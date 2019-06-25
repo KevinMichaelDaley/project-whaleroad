@@ -457,15 +457,14 @@ public:
             
                 if(chunk==nullptr) continue;
             
-                gbuffer.uniform("x0", chunk->x0);
-                gbuffer.uniform("y0", chunk->y0);
-                passthrough.uniform("x0",chunk->x0);
-                passthrough.uniform("y0",chunk->y0);
                 int ixc=indices[j];
                 if(!chunk->is_visible(cam,z0)){ vis[ixc]=false; continue;}
                 
                 if(!vis[ixc] || (frame++)==0 || q[ixc]->result<bool>() || (frame)%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT)==z0){
                     vis[ixc]=true;
+                    
+                    gbuffer.uniform("x0", chunk->x0);
+                    gbuffer.uniform("y0", chunk->y0);
                     gbuffer.uniform("z0",z0*constants::CHUNK_HEIGHT);
                     chunk->copy_to_gpu(z0);
                     q[ixc]->begin();
@@ -478,8 +477,10 @@ public:
                     glStencilMask(0);
                     
                     
-                    q[ixc]->begin();
+                    passthrough.uniform("x0",chunk->x0);
+                    passthrough.uniform("y0",chunk->y0);
                     passthrough.uniform("z0",z0*constants::CHUNK_HEIGHT);
+                    q[ixc]->begin();
                     fullchunk.draw(passthrough);
                     q[ixc]->end();
                     glColorMask(true,true,true,true);

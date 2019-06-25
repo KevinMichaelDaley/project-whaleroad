@@ -1,16 +1,15 @@
 #include "block.h"
 #include <cmath>
-#define ABS(x) ((x>0)*x+(x<0)*(-x))
 bool block_is_slippery(block_t block) {
   return (block != STONE) && (block != SANDSTONE);
 }
 bool block_is_opaque(block_t block) {
-  return block_is_visible(ABS((int)block)) && block != WATER;
+  return block_is_visible(std::abs((int)block)) && (block != WATER);
 }
-bool block_is_visible(block_t block) { return block > 0 && block != AIR; }
+bool block_is_visible(block_t block) { return block > AIR; }
 int block_emissive_strength(block_t block) { return 0; }
 bool block_is_solid(block_t block) {
-  return block_is_visible(ABS((int)block)) && block != WATER;
+  return block_is_visible(std::abs((int)block)) && block != WATER;
 }
 
 void block_albedo(block_t bc, float &r, float &g, float &b) {

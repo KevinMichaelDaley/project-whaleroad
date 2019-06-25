@@ -127,15 +127,15 @@ public:
                                                     updated_center{true}
                                     {
                                         
-                                        input=(int16_t*) malloc((int64_t)(sizeof(int16_t)*constants::WORLD_HEIGHT*84*84*(constants::LIGHT_COMPONENTS-6+3))); 
+                                        input=(int16_t*) malloc((int64_t)(sizeof(int16_t)*constants::WORLD_HEIGHT*184*184*(constants::LIGHT_COMPONENTS+3))); 
                                         
-                                        neighbor_mask=new bool[84*84];
-                                        sun_depth=new int16_t[84*84];
+                                        neighbor_mask=new bool[184*184];
+                                        sun_depth=new int16_t[184*184];
                                             
                                     }
   void update_center(Vector3 player_position) ;
   void update_occlusion(int subradius) ;
-  void update_occlusion(int x0, int x1, int y0, int y1,int D=1) ;
+  void update_occlusion(int x0, int x1, int y0, int y1,int D=2) ;
 
   int nearest_multiple(int x, int base) ;
   void update_visible_list(

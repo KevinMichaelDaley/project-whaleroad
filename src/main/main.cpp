@@ -130,7 +130,7 @@ public:
   void spawn() {
     camera cam;
     cam.look_at({0,0,0},{0,0,1},{0,1,0});
-    cam.set_perspective(M_PI/4.0,1.0,0.1,10.0);
+    cam.set_perspective(std::atan(12.0/128.0),1.0,0.1,10.0);
     Matrix4 viewproj=cam.projection*cam.view;
     printf("[");
     for(int i=0; i<4; ++i){

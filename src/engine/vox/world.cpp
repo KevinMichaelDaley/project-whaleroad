@@ -790,9 +790,10 @@ else{
                                         //continue;
                                     //}
                                     //rasterize the block bottom face
-                                    //using integer pixel coordinates at 32x32 res
-                                    int x0=(10*dx)/dz, x1=(10*(dx+14))/dz+1;
-                                    int y0=(10*dy)/dz, y1=(10*(dy+14))/dz+1; 
+                                    //using integer arithmetic at 128x128 res
+                                    //add a fudge factor of 1 to the block width to account for the side faces.
+                                    int x0=(1225*64*(dx-1))/(dz), x1=(1225*64*(dy+2))/(dz); 
+                                    int y0=(1225*64*(dy-1))/(dz), y1=(1225*64*(dy+2))/(dz); 
                                    // printf("%i %i %i %i\n", x0,y0,x1,y1);
                                     x0=std::max(x0,-64);
                                     y0=std::max(y0,-64);
@@ -800,7 +801,7 @@ else{
                                     x1=std::min(x1,63);
                                     for(int i3=x0+64; i3<=x1+64; ++i3){
                                         for(int j3=y0+64; j3<=y1+64; ++j3){
-                                            occ[i3*128+j3]=1u;
+                                            occ[i3*128+j3]=std::max(occ[i3*128+j3],uint8_t(128-(100*dz-2)/dz));
                                             occ_any=true;
                                         }
                                     }
@@ -828,10 +829,11 @@ else{
                 }
                 else{
                     for(int bit=0; bit<128*128; ++bit){
-                        ao+=(int)!occ[bit];
+                        int dz=128-occ[bit];
+                        ao+=dz+dz;
                     }
-                    
-                    ao=(int)(std::min(((ao)*255.0)/(128.0*128.0),255.0));
+                        
+                    ao=(int)(std::min(((ao))/(128.0*128.0),255.0));
                     
                     //if(ao) std::cerr<<ao<<" ";  
                             
@@ -904,7 +906,7 @@ else{
                 
                 int bit=((x-x0)%8)*4+(y-y0)%4;
                  
-                if(max_delta<1){     
+                if(max_delta<4){     
                  page->has_changes_in_8x4_block(x , y)[0] ^=  ((uint64_t(1u)<<uint64_t(bit)));
                 }   
                 else{
@@ -985,7 +987,7 @@ else{
           (cy * constants::CHUNK_WIDTH - radius) + (center[1]*constants::CHUNK_WIDTH));
       reuse[j]->force_change();
       
-          update_occlusion(reuse[j]->x0-1,reuse[j]->x0+16, reuse[j]->y0-1,reuse[j]->y0+16);
+          update_occlusion(reuse[j]->x0,reuse[j]->x0+constants::CHUNK_WIDTH, reuse[j]->y0,reuse[j]->y0+constants::CHUNK_WIDTH);
       reuse[j]->update(wld);
       ++j;
     }

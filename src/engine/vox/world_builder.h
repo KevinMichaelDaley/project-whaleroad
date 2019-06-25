@@ -102,7 +102,7 @@ public:
                     for(int j=-1; j<=1; ++j){ 
                        if(!i && !j) continue; 
             
-                        int h2=std::max(0,std::min(constants::WORLD_HEIGHT-100,(int)(gen_height(x+i,y+j)*WORLD_SCALE+WORLD_OFFSET)));
+                        int h2=std::max(0,std::min(constants::WORLD_HEIGHT-64,(int)(gen_height(x+i,y+j)*WORLD_SCALE+WORLD_OFFSET)));
                         min_neighbor_height=std::min(min_neighbor_height,h2);
                     }
                 }

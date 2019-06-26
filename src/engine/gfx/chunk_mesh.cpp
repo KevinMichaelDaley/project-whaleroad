@@ -204,7 +204,7 @@ chunk_mesh::chunk_mesh() : vbo_sz(0) {
     for (int vert = 0; vert < 4; ++vert) {
         
       assert(face2[face][vert]>=0 && face3[face][vert]>=0);
-      printf("%i %i\n", face2[face][vert], face3[face][vert]);
+      //printf("%i %i\n", face2[face][vert], face3[face][vert]);
       vertices[max_vertex++] = {(float)FacesOffset[face][vert][0],
                                 (float)FacesOffset[face][vert][1],
                                 (float)FacesOffset[face][vert][2],

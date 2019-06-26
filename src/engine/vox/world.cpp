@@ -8,15 +8,44 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#ifndef __ANDROID__
-    #include <jemalloc/jemalloc.h>
+#include <cassert>
+static char* pages_ram=nullptr;
+static bool pages_allocated[constants::MAX_RESIDENT_PAGES]={false};
+char* allocate_page(){
+    if(pages_ram==nullptr){
+        pages_ram=(char*)malloc(constants::ALL_PAGES_RAM);
+        for(int i=1; i<constants::MAX_RESIDENT_PAGES; ++i){
+            pages_allocated[i]=false;
+        }
+        pages_allocated[0]=true;
+        return pages_ram;
+    }
+    size_t head=0;
+    for(int i=0; i<constants::MAX_RESIDENT_PAGES; ++i){
+        if(!pages_allocated[i]){
+            pages_allocated[i]=true;
+            return &(pages_ram[i*constants::PAGE_RAM]);
+        }
+    }
+    assert(false);//world.cpp ought never to try to allocate a page that won't fit
+                    //since it swaps after MAX_RESIDENT_PAGES
+    return nullptr;
+}
+
+void free_page(char* array){
+    ptrdiff_t i=((ptrdiff_t)array-(ptrdiff_t)pages_allocated)/(ptrdiff_t)constants::PAGE_RAM;
+    assert(i>=0 && i < constants::MAX_RESIDENT_PAGES && pages_allocated[i]);
+    pages_allocated[i]=false;
+}
+
+bool is_same_page_array(char* array, char* array2){
     
-    #define MALLOC_PAGE je_malloc
-    #define FREE_PAGE(x) if(x) je_free(x)
-#else
-    #define MALLOC_PAGE malloc
-    #define FREE_PAGE(x) if(x) free(x)
-#endif
+    ptrdiff_t j=((ptrdiff_t)array2-(ptrdiff_t)array)/(ptrdiff_t)constants::PAGE_RAM;
+    return j==0;
+    
+}
+
+
 using namespace libmorton;
 
   int nearest_multiple_down(int x, int base) {
@@ -89,33 +118,30 @@ bool world_page::load() { // load the page into memory from the file (or network
   }
   nulled=false;
   loaded=true;
-  blocks = (block_t*) MALLOC_PAGE(sizeof(block_t)*(uint64_t)dim *(uint64_t) dim * (uint64_t)constants::WORLD_HEIGHT);
-  invisible_blocks =
-      (uint16_t*)MALLOC_PAGE(sizeof(uint16_t)*(uint64_t)dim * (uint64_t)dim * (uint64_t)constants::WORLD_HEIGHT);
+  blocks = (block_t*) allocate_page();
+  std::memset(blocks, 0, (int64_t)constants::PAGE_RAM-(int64_t)(dim*dim/32*sizeof(uint64_t)));
+  invisible_blocks = (uint16_t*) &blocks[((uint64_t)dim *(uint64_t) dim * (uint64_t)constants::WORLD_HEIGHT)];
       
-  zmap =
-      (uint16_t*)MALLOC_PAGE(sizeof(uint16_t)*(int64_t)dim * (int64_t)dim );
-  std::memset(zmap,0,sizeof(uint16_t)*dim*dim);
-  std::memset(blocks, 0,
-              dim * dim * constants::WORLD_HEIGHT * sizeof(block_t));
-  std::memset(zmap, 0,
-              dim * dim * sizeof(block_t));
-  stream *f = world_builder::get_file_with_offset_r(Vector3i{x0, y0, 0});
-  light =
-      (uint8_t *)MALLOC_PAGE((uint64_t)dim *(uint64_t) dim * (uint64_t)constants::WORLD_HEIGHT * constants::LIGHT_COMPONENTS);
+      
+  zmap = (uint16_t*) &(invisible_blocks[((uint64_t)dim * (uint64_t)dim * (uint64_t)constants::WORLD_HEIGHT)]);
   
+  light = (uint8_t*) &(zmap[((int64_t)dim * (int64_t)dim)]);
+      
+  dirty_list=(uint64_t*) &(light[((uint64_t)dim *(uint64_t) dim * (uint64_t)constants::WORLD_HEIGHT * constants::LIGHT_COMPONENTS)]);
+  
+  //make sure we used all the memory, and only the memory.
+  assert((char*)is_same_page_array((char*)&(dirty_list[(uint64_t)(dim * dim) / 32 -1]),(char*)blocks));
+  assert(!is_same_page_array((char*)&(dirty_list[(uint64_t)(dim * dim) / 32 ]),(char*)blocks));
+  
+  std::memset(dirty_list, 0xff, (uint64_t)(dim * dim) / 32 * sizeof(uint64_t));
+  
+  stream* f = world_builder::get_file_with_offset_r(Vector3i{x0, y0, 0});
   if (f) {
         rle_decompress(blocks, f, dim);
         delete f;
-        f=nullptr;
   } else {
         //world_builder::generate(blocks, dim, {x0, y0, z0});
   }
-  dirty_list = (uint64_t*) MALLOC_PAGE((uint64_t)(dim * dim) / 32 * sizeof(uint64_t)); 
-  std::memset(dirty_list, 0xff, (uint64_t)(dim * dim) / 32 * sizeof(uint64_t));
-  std::memset(invisible_blocks, 0x0,
-              (uint64_t) (dim * dim) * constants::WORLD_HEIGHT *
-                  sizeof(uint16_t));
   for (int x = 0; x < (int) dim; ++x) {
     for (int y = 0; y < (int) dim; ++y) {
       set(x + x0, y + y0, constants::WORLD_HEIGHT-1,
@@ -130,7 +156,6 @@ bool world_page::load() { // load the page into memory from the file (or network
       }
     }
   }
-  std::memset(light, 0, (uint64_t)(dim * dim) * constants::WORLD_HEIGHT * constants::LIGHT_COMPONENTS);
   return true;
 }
 
@@ -157,12 +182,9 @@ bool world_page::swap() { // save the current page and then get rid of it so we
   // on disk but we can store certain information relevant to gameplay
   // elsewhere.
  // bool success = save();
+    if(!loaded || nulled) return true;
     bool success=true;
-    FREE_PAGE(blocks);
-    FREE_PAGE(light);
-    FREE_PAGE(dirty_list);
-    FREE_PAGE(zmap);
-    FREE_PAGE(invisible_blocks);
+    free_page((char*)blocks);
     blocks = nullptr;
     zmap = nullptr;
     light = nullptr;
@@ -676,58 +698,82 @@ inline uint8_t sqrt8(uint8_t x){
          block_t* barray=&page->get(sx,sy,0,valid);
          int N=std::max(x1+1-x0,y1+1-y0);
           int N3=N;
+            
+       static int16_t input[84*84*constants::WORLD_HEIGHT*(constants::LIGHT_COMPONENTS+4)], sun_depth[84*84];
+       static bool neighbor_mask[84*84];
          std::memset(neighbor_mask,0,N3*N3*sizeof(bool));
-         constexpr int N2=3+constants::LIGHT_COMPONENTS;
+         constexpr int N2=4+constants::LIGHT_COMPONENTS;
          uint64_t changed=page->has_changes_in_8x4_block(x0 , y0)[0];
          unsigned i=0,j=0;
-        for(unsigned d=0,count=0; count<=N*N; ++count){
-                
-                int x=i+x0;
-                int y=j+y0;
-                if(!page->contains(x,y,0)){
-                    page=wld->get_page(x,y,0);
-                    page->bounds(sx,sy,sz,dim);
-                    barray=&page->get(sx,sy,0,valid);
-                }
-                changed=page->has_changes_in_8x4_block(x , y)[0];
-                int64_t bit_x=(x-sx)%8;
-                int64_t bit_y=(y-sy)%4;
-                uint64_t bit=uint64_t(bit_x*4+bit_y);
-                if(((changed)&(uint64_t(1u)<<bit))!=0){
-                    
-                        for(int dx=-D; dx<=D; ++dx){
-                            for(int dy=-D; dy<=D; ++dy){
-                                if(i+dx>=D && j+dy>=D && i+dx<N3-D && j+dy<N3-D){
-                                    neighbor_mask[(i+dx)*N3+j+dy]=true;
+         world_page* pages[4]={page,nullptr,nullptr,nullptr};
+         int Npages=1;
+         if(sx+dim<=x1){
+             
+             pages[1]=wld->get_page(sx+dim,y0,0);
+             Npages++;
+         }
+         if(sy+dim<=y1){
+             
+             pages[2]=wld->get_page(x0,sy+dim,0);
+             Npages++;
+             
+         }
+         
+         if(sy+dim<=y1 && sx+dim<=x1){
+             
+             pages[3]=wld->get_page(sx+dim,sy+dim,0);
+             Npages++;
+             
+         }
+        for(int n=0; n<Npages; ++n){
+            
+            if(pages[n]==nullptr) continue;
+            pages[n]->bounds(sx,sy,sz,dim);
+            barray=&(pages[n]->get(sx,sy,0,valid));
+            page=pages[n];
+            for(int x=std::max(x0,sx); x<=std::min(x1, sx+dim-1); ++x){
+                for(int y=std::max(y0,sy); y<=std::min(y1, sy+dim-1); ++y){
+                    i=x-x0;
+                    j=y-y0;
+                    changed=page->has_changes_in_8x4_block(x , y)[0];
+                    int64_t bit_x=(x-sx)%8;
+                    int64_t bit_y=(y-sy)%4;
+                    uint64_t bit=uint64_t(bit_x*4+bit_y);
+                    if(((changed)&(uint64_t(1u)<<bit))!=0){
+                        
+                            for(int dx=-D; dx<=D; ++dx){
+                                for(int dy=-D; dy<=D; ++dy){
+                                    if(i+dx>=D && j+dy>=D && i+dx<N3-D && j+dy<N3-D){
+                                        neighbor_mask[(i+dx)*N3+j+dy]=true;
+                                    }
                                 }
                             }
-                        }
+                    }
+                    
+                    
+                    sun_depth[i*N3+j]=page->zmap[(x-sx)*dim+y-sy];
                 }
-                
-                
-                //printf("%i %i\n",i,j);
-                d2xy(N,&d,&i,&j);
-                sun_depth[i*N3+j]=page->zmap[(x-sx)*dim+y-sy];
+            }
         }
         i=0; j=0;
         
-        for(unsigned d=0,count=0; count<=N*N; ++count){
+       
+        for(int n=0; n<Npages; ++n){
+            
+            if(pages[n]==nullptr) continue;
+            pages[n]->bounds(sx,sy,sz,dim);
+            barray=&(pages[n]->get(sx,sy,0,valid));
+            page=pages[n];
+            for(int x=std::max(x0,sx); x<=std::min(x1, sx+dim-1); ++x){
+                for(int y=std::max(y0,sy); y<=std::min(y1, sy+dim-1); ++y){
                 
                 
                 
-                
-                int x=i+x0;
-                int y=j+y0;
-                if(x>x1 || x<x0) continue;
-                if(y>y1 || y<y0) continue;
-                if(!page->contains(x,y,0)){
-                    page=wld->get_page(x,y,0);
-                    page->bounds(sx,sy,sz,dim);
-                    barray=&page->get(sx,sy,0,valid);
-                }
+                i=x-x0;
+                j=y-y0;
+                    
                 bool dirty=(neighbor_mask[i*N3+j]);  
                 if(!dirty){
-                    d2xy(N,&d,&i,&j);
                     continue;
                 }
                 std::memset(&(input[((i*N3+j)*constants::WORLD_HEIGHT)*N2]),0,sizeof(int16_t)*N2*constants::WORLD_HEIGHT);
@@ -752,30 +798,26 @@ inline uint8_t sqrt8(uint8_t x){
                             break;
                         }
                
+                }    
                 }
+            }
         }
-        page=wld->get_page(x0+1,y0+1,0);
-        
-        page->bounds(sx,sy,sz,dim);
-        barray=&page->get(sx,sy,0,valid);
                     
-        unsigned i2=0,j2=0;
-
         
-        for(unsigned d=0,count=0; count<=(N-2*D)*(N-2*D); ++count){
-                i=i2+D;
-                j=j2+D;
-                int x=i+x0;
-                int y=j+y0;
-                if(!page->contains(x,y,0)){
-                    page=wld->get_page(x,y,0);
-                    page->bounds(sx,sy,sz,dim);
-                }
+        for(int n=0; n<Npages; ++n){
+            if(pages[n]==nullptr) continue;
+            pages[n]->bounds(sx,sy,sz,dim);
+            barray=&(pages[n]->get(sx,sy,0,valid));
+            page=pages[n];
+            for(int x=std::max(x0,sx); x<=std::min(x1, sx+dim-1); ++x){
+                for(int y=std::max(y0,sy); y<=std::min(y1, sy+dim-1); ++y){
+                
+                i=x-x0;
+                j=y-y0;
                 
                 bool dirty=neighbor_mask[i*N3+j];
                 if(!dirty){
                     
-                    d2xy(N,&d,&i2,&j2);
                     continue;
                 }
                 
@@ -956,7 +998,8 @@ inline uint8_t sqrt8(uint8_t x){
                 else{
                   page->has_changes_in_8x4_block(x , y)[0] |= uint64_t(1u)<<uint64_t(32u);
                 }
-                d2xy(N-D*2,&d,&i2,&j2);
+                }
+            }
                
         }   
         

@@ -80,7 +80,7 @@ public:
   unsigned char *get_light(int x, int y, int z);
   block_t &get_voxel(int x, int y, int z, bool &valid);
   block_t get_voxel(int x, int y, int z);
-  bool set_voxel(int x, int y, int z, block_t b, bool update_rle = true, bool update_neighborhood=true);
+  bool set_voxel(int x, int y, int z, block_t b, bool update_rle = true, bool update_neighborhood=true);        
   bool cleanup(int px, int py, int pz, int vanish_dist);
   void save_all();
   int get_z(int x, int y, uint16_t *rle = nullptr, world_page* page=nullptr);
@@ -113,8 +113,6 @@ private:
   std::vector<chunk_mesh *> fast_update_queue;
   int mesh_update_head, fast_update_head;
 
-        int16_t* input, *sun_depth;
-        bool* neighbor_mask;
 public:
   world *get_world() ;
   world_view(world* w, Vector3 center0, int rad): center{(int)(center0.x()/constants::CHUNK_WIDTH), (int)(center0.y()/constants::CHUNK_WIDTH), (int)center0.z()},
@@ -127,10 +125,8 @@ public:
                                                     updated_center{true}
                                     {
                                         
-                                        input=(int16_t*) malloc((int64_t)(sizeof(int16_t)*constants::WORLD_HEIGHT*184*184*(constants::LIGHT_COMPONENTS+3))); 
                                         
-                                        neighbor_mask=new bool[184*184];
-                                        sun_depth=new int16_t[184*184];
+                                        
                                             
                                     }
   void update_center(Vector3 player_position) ;

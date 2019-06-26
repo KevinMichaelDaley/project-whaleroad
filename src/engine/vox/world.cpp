@@ -828,7 +828,7 @@ inline uint8_t sqrt8(uint8_t x){
                 int z=wld->get_z(x,y,skip_invisible_array,page);
                 const block_t* b2=&(barray[(((x-sx)*(int)dim)+(y-sy))*(int) constants::WORLD_HEIGHT]);
                 
-                constexpr int R=8;
+                constexpr int R=64;
                 uint8_t occ[R*R*4]={0};
                 int zmaxneighbor=z;
                 bool occ_any=false;

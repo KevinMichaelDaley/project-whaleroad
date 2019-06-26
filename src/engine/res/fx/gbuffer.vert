@@ -29,7 +29,7 @@
 				int L1z=(int(L2>>8u)>>(4*int(face_neighbor2)))%16;*/
 				uint xydiff=(uint(L1)>>5u)&0xffu;
 				
-				ivec3 positioni=ivec3(int(xydiff)/16+x0,int(xydiff)%16+y0,int(L1%32u)); 
+				ivec3 positioni=ivec3(int(xydiff)/16+x0,int(xydiff)%16+y0,int(L1%32u)+z0); 
 								
 				vec3 position=vec3(float(positioni.x),float(positioni.y),float(positioni.z))+pos;
 				

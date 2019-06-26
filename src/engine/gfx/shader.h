@@ -21,8 +21,8 @@
 #include <sstream>
 #include <unordered_map>
 #define SHADOW_CASCADES 4
-#define SMAP_RES(l) 1920
-#define SHADOW_DIST 400.0
+#define SMAP_RES(l) 2048
+#define SHADOW_DIST 500.0
 std::string read_text_file(std::string filename) {
   FILE *f = fopen(filename.c_str(), "r");
   fseek(f, 0, SEEK_END);
@@ -94,24 +94,28 @@ class block_default_forward_pass{
     typedef GL::Attribute<0, Vector2> pos;
     typedef GL::Attribute<1, Vector2> uv;
     typedef GL::Attribute<0, Vector3> cpos;
-    shader deferred, passthrough, gbuffer,sky;
+    shader fwd, passthrough, caster,sky;
     scene* scene_;
     player* player_;
     GL::Texture2D* atlas_;
     GL::Texture2D gbuffertex;
-    GL::Texture2D shadowMap[SHADOW_CASCADES];
-    GL::Framebuffer* shadowFramebuffer[SHADOW_CASCADES];
+    GL::Texture2D shadowMap[SHADOW_CASCADES+1];
+    GL::Framebuffer* shadowFramebuffer[SHADOW_CASCADES+1];
     GL::Framebuffer GBuffer;
     
-    GL::Renderbuffer depthStencil[SHADOW_CASCADES];
+    GL::Renderbuffer depthStencil[SHADOW_CASCADES+1];
     
     GL::Renderbuffer depthStencil1;
     int frame;
     GL::Mesh fsquad, fullchunk;
     
     GL::Buffer _quadBuffer, _cubeBuffer;
-    bool vis[4096*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT];
-    GL::SampleQuery* q[4096*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT];
+    std::vector<bool> vis;
+    
+    std::vector<int> indices;
+    std::vector<float> min_depth;
+    std::vector<int> visible_chunks;
+    GL::SampleQuery* q;
     struct Vertex {
         Vector2 position;
         Vector2 textureCoordinates;
@@ -119,7 +123,11 @@ class block_default_forward_pass{
 public:
     block_default_forward_pass(GL::Texture2D& atlas):
         GBuffer(GL::defaultFramebuffer.viewport()),
-        deferred{"deferred"}, passthrough{"passthrough"}, gbuffer{"gbuffer"}, sky{"sky"}{
+        fwd{"blocks"}, passthrough{"passthrough"}, caster{"caster"}, sky{"sky"}{
+            
+        visible_chunks.reserve(8192);
+        min_depth.reserve(8192);
+        indices.reserve(8192);
             frame=0;
             const Vertex lb{ { -1, -1 },{ 0, 0 } };         // left bottom
             const Vertex lt{ { -1,  1 },{ 0, 1 } };         // left top
@@ -192,12 +200,12 @@ public:
                     cpos{});
             
             atlas_=&atlas;
-            for(int i=0; i<4096*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++i){
-                vis[i]=false;
-                q[i]=new GL::SampleQuery{GL::SampleQuery::Target::AnySamplesPassed};
+            q=(GL::SampleQuery*) malloc(sizeof(GL::SampleQuery)*65535);
+            for(int i=0; i<65535; ++i){
+                q[i]=GL::SampleQuery{GL::SampleQuery::Target::AnySamplesPassed};
             }
-            /*
-            for(int l=0; l<SHADOW_CASCADES; ++l){
+            
+            for(int l=0; l<SHADOW_CASCADES+1; ++l){
                
             
                 depthStencil[l].setStorage(GL::RenderbufferFormat::DepthStencil,{SMAP_RES(l),SMAP_RES(l)});
@@ -217,7 +225,7 @@ public:
                         std::exit( 0 );
                     }
             }
-            */
+            
              depthStencil1.setStorage(GL::RenderbufferFormat::DepthStencil, {GL::defaultFramebuffer.viewport().sizeX(),GL::defaultFramebuffer.viewport().sizeY()});
             (gbuffertex = GL::Texture2D{})
             .setStorage(1, GL::TextureFormat::RGBA16F, {GL::defaultFramebuffer.viewport().sizeX(),GL::defaultFramebuffer.viewport().sizeY()})
@@ -238,9 +246,6 @@ public:
     }
     block_default_forward_pass& set_scene(scene* s){
         scene_=s;
-        deferred.texture("atlas", *atlas_);
-        deferred.uniform("sun_color", Vector3(1,1,1));
-        deferred.uniform("fog_color",Vector3{0.79,0.69,0.7});
         return *this;
     }
     block_default_forward_pass& set_player(player* p){
@@ -300,7 +305,7 @@ public:
         return 0.8;
     }
     float get_sky_angle(Vector3& sky_color, Vector3& sun_color, bool& is_day){
-        float SECONDS_IN_DAY_NIGHT=300.0;
+        float SECONDS_IN_DAY_NIGHT=30.0;
         float DAYS_IN_YEAR=10;
         float t=timer::now()+SECONDS_IN_DAY_NIGHT/3.0;
         float time_since_sunrise=std::fmod(t,SECONDS_IN_DAY_NIGHT);
@@ -326,11 +331,11 @@ public:
         camera cam2;
         int x=player_->get_position().x();
         int y=player_->get_position().y();
-        cam2.set_ortho({SHADOW_DIST,SHADOW_DIST}, 0.1+(SHADOW_DIST*2.0)*i/double(SHADOW_CASCADES), 0.1+(SHADOW_DIST*2.0)*(j)/double(SHADOW_CASCADES));
+        cam2.set_ortho({SHADOW_DIST*2,SHADOW_DIST*2}, 0.1+(SHADOW_DIST*2.0*i)/double(SHADOW_CASCADES), 0.1+(SHADOW_DIST*2.0*j)/double(SHADOW_CASCADES));
         Vector3 tmp1,tmp2;
         bool tmp3;
         float t=get_sky_angle(tmp1,tmp2,tmp3);
-        cam2.look_at({100*(x/100)+SHADOW_DIST*sin(t),100*(y/100),SHADOW_DIST*cos(t)},{-sin(t),0.0,-cos(t)},{cos(t),0.0,sin(t)});
+        cam2.look_at({100*(x/100)+SHADOW_DIST/2.0*sin(t),100*(y/100),2*SHADOW_DIST/2.0*cos(t)},{-sin(t),0.0,-cos(t)},{cos(t),0.0,sin(t)});
         return cam2;
     }
     float cross(Vector2 x, Vector2 y){
@@ -426,31 +431,38 @@ public:
         
         camera cam=player_->get_cam();
         Matrix4 viewproj=cam.projection*cam.view;
-        //camera sun_cam=get_sun_cam(0,SHADOW_CASCADES);
-        gbuffer.uniform("view", cam.view);
-        gbuffer.uniform("projection", cam.projection);   
+        camera sun_cam=get_sun_cam(0,SHADOW_CASCADES);
+        /*gbuffer.uniform("view", cam.view);
+        gbuffer.uniform("projection", cam.projection);   */
         
         GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
-        GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
+        /*GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
         GL::Renderer::disable(GL::Renderer::Feature::Blending);
         GBuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth).bind();
         
         fsquad.draw(sky);
         GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
-        std::array<int,4096> indices={0};
-        std::array<float,4096> min_depth={0.0};
+        */
+        GL::Renderer::setClearColor({1,1,1,1});
+        for(int l=0; l<SHADOW_CASCADES; ++l){
+            shadowFramebuffer[l]->clear(GL::FramebufferClear::Color|
+                        GL::FramebufferClear::Depth|
+                        GL::FramebufferClear::Stencil).bind();
+        }
+        indices.clear();
+        visible_chunks.clear();
+        min_depth.clear();  
         for(int i=0,e=all_chunks.size()*(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT); i<e; ++i){
             int j=i/(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
             int z0=i%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
-            indices[i]=i;
+            indices.push_back(i);
             float z=all_chunks[j]->min_depth(cam,z0);
-            min_depth[i]=z;            
+            min_depth.push_back(z);            
         }
         
-                    
-        passthrough.uniform("transform", viewproj);  
-        std::sort(indices.begin(), indices.begin()+all_chunks.size()*(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT), [min_depth](int i, int j){return min_depth[i]<min_depth[j];});
-        for(int j=0,e=all_chunks.size()*(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT); j<e; ++j){
+        vis.resize(indices.size(),false);
+        std::sort(indices.begin(), indices.end(), [this](int i, int j){return this->min_depth[i]<this->min_depth[j];});
+        for(int j=0,e=indices.size(); j<e; ++j){
                 int i=indices[j]/(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
                 int z0=indices[j]%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
                 chunk_mesh* chunk=all_chunks[i];
@@ -458,73 +470,71 @@ public:
                 if(chunk==nullptr) continue;
             
                 int ixc=indices[j];
-                if(!chunk->is_visible(cam,z0)){ vis[ixc]=false; continue;}
+                bool frustum_cull=chunk->is_visible(cam,z0);
+                if(!frustum_cull && !chunk->is_visible(sun_cam,z0)){ vis[ixc]=false; continue;}
                 
-                if(!vis[ixc] || (frame++)==0 || q[ixc]->result<bool>() || (frame)%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT)==z0){
+                    if(frustum_cull){
+                        visible_chunks.push_back(ixc);
+                    }
+                caster.uniform("x0",chunk->x0);
+                caster.uniform("y0",chunk->y0);
+                caster.uniform("z0",z0*constants::CHUNK_HEIGHT);
+                if((!vis[ixc]) || (frame++)==0 || q[ixc].result<bool>()){
                     vis[ixc]=true;
                     
-                    gbuffer.uniform("x0", chunk->x0);
-                    gbuffer.uniform("y0", chunk->y0);
-                    gbuffer.uniform("z0",z0*constants::CHUNK_HEIGHT);
                     chunk->copy_to_gpu(z0);
-                    q[ixc]->begin();
-                    chunk->draw(&gbuffer,z0);
-                    q[ixc]->end();
+                    q[ixc].begin();
+                    
+                    for(int l=0; l<SHADOW_CASCADES; ++l){
+                        camera slice_cam=get_sun_cam(l,l+1);    
+                        shadowFramebuffer[l]->bind();
+                        if(!chunk->is_visible(slice_cam,z0)){  continue; }
+                        
+                        caster.uniform("view", slice_cam.view);
+                        caster.uniform("projection", slice_cam.projection);
+                        
+                    }
+                    chunk->draw(&caster,z0);
+                    q[ixc].end();
                 }   
                 else{
+                    
+                    
                     glColorMask(false,false,false,false);
                     glDepthMask(false);
                     glStencilMask(0);
                     
+                            passthrough.uniform("x0",chunk->x0);
+                            passthrough.uniform("y0",chunk->y0);
+                            passthrough.uniform("z0",z0*constants::CHUNK_HEIGHT);
+                            
+                    q[ixc].begin();
+                    for(int l=0; l<SHADOW_CASCADES; ++l){
                     
-                    passthrough.uniform("x0",chunk->x0);
-                    passthrough.uniform("y0",chunk->y0);
-                    passthrough.uniform("z0",z0*constants::CHUNK_HEIGHT);
-                    q[ixc]->begin();
+                        camera slice_cam=get_sun_cam(l,l+1);    
+                        shadowFramebuffer[l]->bind();
+                        if(!chunk->is_visible(slice_cam,z0)){  continue; }
+                        
+                    
+                        passthrough.uniform("transform", slice_cam.projection*slice_cam.view);  
+                            
+                    
                     fullchunk.draw(passthrough);
-                    q[ixc]->end();
+                    }
+                    
+                    q[ixc].end();
+                    
                     glColorMask(true,true,true,true);
                     glDepthMask(true);
                     glStencilMask(~0);
                 }
          }
-         /*
-            //GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
-        GL::Renderer::enable(GL::Renderer::Feature::Blending);
-        GL::Renderer::setClearColor({1,1,1,1});
-        for(int l=0; l<SHADOW_CASCADES; ++l){
-            
-            camera slice_cam=get_sun_cam(0,SHADOW_CASCADES);
-           // GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
-            caster.uniform("view", slice_cam.view);
-            caster.uniform("projection", slice_cam.projection);
-            
-            shadowFramebuffer[l]->clear(GL::FramebufferClear::Color|
-                        GL::FramebufferClear::Depth|
-                        GL::FramebufferClear::Stencil).bind();
-                
-            for(int i=0,e=all_chunks.size(); i<e; ++i){
-                    chunk_mesh* chunk=all_chunks[i];
-                    if(chunk==nullptr) continue;
-                    
-                    caster.uniform("x0", chunk->x0);
-                    caster.uniform("y0", chunk->y0);
-                    for(int z0=0; z0<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++z0){
-                        if(!chunk->is_visible(slice_cam,z0)) continue;
-                        int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
-                        if(q[ixc]->result<bool>() || (frame++)%all_chunks.size()==i){
-                            if(!chunk->is_visible(cam,z0)) q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->begin();
-                            chunk->draw(&caster,z0);
-                            if(!chunk->is_visible(cam,z0)) q[ixc+constants::WORLD_HEIGHT*all_chunks.size()/constants::CHUNK_HEIGHT]->end();
-                        }
-                        q[ixc]->endConditionalRender();
-                    }
-                    
-            }
-        }
-        */
+         
+           // GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
+        
+        
            
-            GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
+            //GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
             //GL::Renderer::enable(GL::Renderer::Feature::FaceCulling);
             
         
@@ -536,12 +546,29 @@ public:
             GL::defaultFramebuffer.bind();
         
         
-        deferred.texture("atlas", *atlas_);
-        deferred.texture("gbuffer", gbuffertex);
-        
-        deferred.uniform("sun_color", sun_color);
-        deferred.uniform("sky_color", sky_color);
-        deferred.uniform("fog_color",Vector3{0.4,0.3,0.2});
+        fwd.texture("atlas", *atlas_);
+        for(int i=0; i<SHADOW_CASCADES; ++i){
+            std::stringstream ss;
+            ss<<i;
+            fwd.texture("shadowMap["+ss.str()+"]", shadowMap[i]);
+         }
+         fwd.uniform("SHADOW_CASCADES", (float)SHADOW_CASCADES);
+         fwd.uniform("sun_color", sun_color);
+         fwd.uniform("sky_color", sky_color);
+         fwd.uniform("fog_color",Vector3{0.4,0.3,0.2});
+         fwd.uniform("view", cam.view);
+         fwd.uniform("projection", cam.projection);
+         fwd.uniform("light_view", sun_cam.view);
+         fwd.uniform("light_projection", sun_cam.projection);
+         for(int j=0,e=visible_chunks.size(); j<e; ++j){
+                int i=visible_chunks[j]/(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
+                int z0=visible_chunks[j]%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
+                chunk_mesh* chunk=all_chunks[i];
+                fwd.uniform("x0", chunk->x0);
+                fwd.uniform("y0", chunk->y0);
+                fwd.uniform("z0", z0*constants::CHUNK_HEIGHT);
+                chunk->draw(&fwd,z0);
+         }
         /*
         for(int i=0,e=all_chunks.size(); i<e; ++i){
             chunk_mesh* chunk=all_chunks[i];
@@ -552,12 +579,11 @@ public:
                 if(!chunk->is_visible(cam,z0)) continue;
                 
                 int ixc=i*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT+z0;
-                q[ixc]->beginConditionalRender(GL::SampleQuery::ConditionalRenderMode::Wait);
+                q[ixc].beginConditionalRender(GL::SampleQuery::ConditionalRenderMode::Wait);
                 chunk->draw(&deferred,z0);
-                q[ixc]->endConditionalRender();
+                q[ixc].endConditionalRender();
             }
         }*/
-        fsquad.draw(deferred);
         /*
         for(int i=0,e=all_chunks.size(); i<e; ++i){
             
@@ -575,9 +601,8 @@ public:
             delete shadowFramebuffer[i];
         }
         
-        for(int i=0; i<4096 *constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++i){
-            delete q[i];
-        }
+        free(q);
+        
     }
 };
 

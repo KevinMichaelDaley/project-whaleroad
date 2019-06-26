@@ -5,7 +5,7 @@
 			layout(location = 4) in uint face_index;
 			layout(location = 5) in uint face_neighbor1;
 			layout(location = 6) in uint face_neighbor2;
-			uniform int x0,y0;
+			uniform int x0,y0,z0;
 			
 /*
 uniform sampler2D shadowmap4;
@@ -27,26 +27,34 @@ uniform sampler2D shadowmap7;
 			uniform mat4x4 light_view;
 			uniform vec3 sun_color, sky_color;
 			
+            
             void main(){
                 
-				int L1x=(int(L2>>8u)>>(4*int(face_index)))%16;
-				int L1y=(int(L2>>8u)>>(4*int(face_neighbor1)))%16;
-				int L1z=(int(L2>>8u)>>(4*int(face_neighbor2)))%16;
-				uint xydiff=(uint(L1)>>16u)&0xffu;
+				uint which=uint(L1>>13u)%8192u;
+				int L1x=int((L2>>(6u*(face_index)))%64u)*int(face_index<5u);
+				L1x+=int((L1>>21u)&0xffu)*int(face_index==5u);
 				
-				ivec3 positioni=ivec3(int(xydiff)/16+x0,int(xydiff)%16+y0,int(L1%16384u)); 
+				int L1y=int((L2>>(6u*(face_neighbor1)))%64u)*int(face_neighbor1<5u);
+				L1y+=int((L1>>21u)&0xffu)*int(face_neighbor1==5u);
+				
+				int L1z=int((L2>>(6u*(face_neighbor2)))%64u)*int(face_neighbor2<5u);
+				L1z+=int((L1>>21u)&0xffu)*int(face_neighbor2==5u);
+				/*int L1y=(int(L2>>8u)>>(4*int(face_neighbor1)))%16;
+				int L1z=(int(L2>>8u)>>(4*int(face_neighbor2)))%16;*/
+				uint xydiff=(uint(L1)>>5u)&0xffu;
+				
+				ivec3 positioni=ivec3(int(xydiff)/16+x0,int(xydiff)%16+y0,int(L1%32u)+z0); 
 								
 				vec3 position=vec3(float(positioni.x),float(positioni.y),float(positioni.z))+pos;
 				
-				uint which=uint(L1>>24u)&0xffu+(uint(L2&0xffu)<<8u);
-				coord=uv+vec2(float(which%256u)/256.0,0.0);
+				vec4 vpos=projection*view*vec4(position.xyz,1.0);
+
+				float Lr=(L1y+L1x+L1z)/96.0;
 				 vpos=projection*view*vec4(position.xyz,1.0);
 				
-				
-				float Lr=float(L1x+L1y+L1z)/45.0;
 				col=Lr*(sun_color+sky_color);
 				p=light_projection*light_view*vec4(position,1.0);
-				 
+				 coord=uv+vec2(float(which%256u)/256.0,0.0);
                 /*
                 else if(z<zs*5.0){
                     z2=texture(shadowmap4,ShadowCoordPostW.xy).r/SHADOW_CASCADES+zs*4.0;

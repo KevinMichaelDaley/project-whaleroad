@@ -112,7 +112,6 @@ private:
   
   std::vector<chunk_mesh *> fast_update_queue;
   int mesh_update_head, fast_update_head;
-
 public:
   world *get_world() ;
   world_view(world* w, Vector3 center0, int rad): center{(int)(center0.x()/constants::CHUNK_WIDTH), (int)(center0.y()/constants::CHUNK_WIDTH), (int)center0.z()},
@@ -131,7 +130,7 @@ public:
                                     }
   void update_center(Vector3 player_position) ;
   void update_occlusion(int subradius) ;
-  void update_occlusion(int x0, int x1, int y0, int y1,int D=6) ;
+  void update_occlusion(int x0, int x1, int y0, int y1,int D=4) ;
 
   int nearest_multiple(int x, int base) ;
   void update_visible_list(

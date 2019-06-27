@@ -27,7 +27,7 @@ public:
     left_mouse_down = false;
     right_mouse_down = false;
     spawned = false;
-    chisel_strength = 1;
+    chisel_strength = 4;
     max_block_health = -1;
     look_x = 0;
     look_y = 1;
@@ -66,6 +66,16 @@ public:
     else if (k == keycode_t::C) {
       toggle_climbing();
     }
+    
+    else if (k == keycode_t::One) {
+       place_block=GRASS;
+    }
+    else if (k == keycode_t::Two) {
+       place_block=STONE;
+    }
+    else if (k == keycode_t::Three) {
+       place_block=DIRT;
+    }
   }
   void keyup(keycode_t k) {
     if (k == keycode_t::Space) {
@@ -73,6 +83,7 @@ public:
     } else if (k == keycode_t::W) {
       w_down = false;
     }
+    
 
     else if (k == keycode_t::A) {
       a_down = false;
@@ -202,7 +213,7 @@ public:
           if (b > WATER) {
             if (floor(x2) != target[0] || floor(y2) != target[1] ||
                 floor(z2) != target[2]) {
-              block_health = (b == STONE || b == SANDSTONE) ? 10 : 8;
+              block_health = (b == STONE || b == SANDSTONE) ? 40 : 32;
               max_block_health = block_health;
             }
             block_target_type = b;

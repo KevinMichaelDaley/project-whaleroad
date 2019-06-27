@@ -130,8 +130,42 @@ public:
   void spawn() {
     camera cam;
     cam.look_at({0,0,0},{0,0,1},{0,1,0});
-    cam.set_perspective(std::atan(12.0/128.0),1.0,0.1,10.0);
+    cam.set_perspective(1.0,1.0,0.1,128.0);
     Matrix4 viewproj=cam.projection*cam.view;
+    printf("[");
+    for(int i=0; i<4; ++i){
+        printf("[");
+        for(int j=0; j<4; ++j){
+            printf("%f",viewproj[j][i]);
+            if(j<3) printf(",");
+        }
+        printf("]\n");
+    }
+    printf("]\n\n\n");
+    
+    
+    
+    
+    cam.look_at({0,0,0},{0,1,0},{0,0,1});
+    cam.set_perspective(1.0,1.0,0.1,128.0);
+    viewproj=cam.projection*cam.view;
+    printf("[");
+    for(int i=0; i<4; ++i){
+        printf("[");
+        for(int j=0; j<4; ++j){
+            printf("%f",viewproj[j][i]);
+            if(j<3) printf(",");
+        }
+        printf("]\n");
+    }
+    printf("]\n\n\n");
+    scene_.create_default_player(player_name, w_);
+    
+    
+    
+    cam.look_at({0,0,0},{1,0,0},{0,0,1});
+    cam.set_perspective(1.0,1.0,0.1,128.0);
+    viewproj=cam.projection*cam.view;
     printf("[");
     for(int i=0; i<4; ++i){
         printf("[");

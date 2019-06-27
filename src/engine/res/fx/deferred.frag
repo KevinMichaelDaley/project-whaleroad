@@ -10,7 +10,8 @@ void main(){
     float z=g.b*0.5+0.5;
     if(z>0.9999) color=vec4(sky_color,1.0);
     else{
-    vec3 rgb=texture(atlas,g.rg).rgb*(mix(sky_color*0.05,sun_color,g.a));
+    vec3 rgb=texture(atlas,g.rg).rgb*(mix(sky_color*0.05,sun_color,2.0*g.a));
     color=vec4(mix(rgb,fog_color,pow(z,156.0)),1.0);
     }
 }
+    

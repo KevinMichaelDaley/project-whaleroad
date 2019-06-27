@@ -55,8 +55,8 @@ public:
       rz=eye_positions[2]+x[2];
   }
   character(world* wld, float xx = 0, float yy = 0, float zz = 0, bool spawn_random = true,
-            bool spawn_on_surface = true, float rx = 0.5, float ry = 0.5,
-            float rz = 1.2, float eye_height = 0.35, float angle = 0){
+            bool spawn_on_surface = true, float rx = 0.4, float ry = 0.4,
+            float rz = 0.8, float eye_height = 0.6, float angle = 0){
     wld_=wld;
     first_frame = true;
     health = 1.0f;
@@ -151,9 +151,10 @@ public:
     x2[2] -= std::min(std::max(x2[2], 0.0f), height);
     return std::sqrt(x2[0] * x2[0] + x2[1] * x2[1] + x2[2] * x2[2]) - radius_x;
   }
-  bool collides_with_block(float xx, float yy, float zz, float dx, float dy,
+  int8_t collides_with_block(float xx, float yy, float zz, float dx, float dy,
                            float dz) {
     float d = 1.0 / 1;
+    int8_t mask=0;
     if (zz > (x[2] + height + dz) || zz + d < x[2] + dz) {
       return false;
     }
@@ -173,7 +174,8 @@ public:
       Vector3 a{xx + offsets[face][0][0], yy + offsets[face][0][1], 0};
       Vector3 b{xx + offsets[face][1][0], yy + offsets[face][1][1], 0};
       if ((c - a).projected(b - a).length() <= radius_x) {
-        collides_xy = true;
+        mask|=face;
+        collides_xy=true;
       }
     }
     if (!collides_xy) {
@@ -182,18 +184,18 @@ public:
       bool inside_y =
           ((x[1] + radius_x + dy) <= yy + d && (x[1] + radius_x + dy) >= yy);
       if (!inside_x || !inside_y) {
-        return false;
+        return 0;
       }
     }
 
     if (zz > (x[2] + dz) && zz < (x[2] + dz + height)) {
-      return true;
+      mask|=0;
     }
 
     if (zz + d > (x[2] + dz) && zz + 1 < (x[2] + dz + height)) {
-      return true;
+      mask|=1;
     }
-    return false;
+    return mask;
   }
 
   float sdf_box(Vector3 p, Vector3 c) {
@@ -249,7 +251,7 @@ public:
     int Ny = std::ceil(x[1] + std::max(dy * 10.0f / 10.0f, 0.0f) + radius_y) -
              yy0 + 1;
     int Nz =
-        std::ceil(x[2] + std::max(dz1 * 10.0f, 0.0f) / 10.0 + height) + 1 - zz0;
+        std::floor(x[2] + std::max(dz1 * 10.0f, 0.0f) / 10.0 + height) + 1 - zz0;
     /*
     std::vector<float> d, d2;
     d.reserve(Nx*Ny*Nz*64);
@@ -305,6 +307,7 @@ public:
     }*/
     int t2 = 0;
     float dz;
+    int8_t collision_mask=0;
     for (t2 = 1; (t2 < 32) && !stop_moving; t2 += 2) {
       dz = std::max(dz0 - dt * dt * 9.81f * (t2 * t2 / 100.0f) / 2.0f *
                               gravity_multiplier,
@@ -341,11 +344,9 @@ public:
             }
 
             int face = 0;
-            if (collides_with_block(i, j, k, dx * t2 / 10.0, dy * t2 / 10.0,
-                                    dz * t2 / 10.0)) {
-              if (b > WATER && t2 <= 10) {
-                stop_moving = true;
-              }
+            collision_mask|=collides_with_block(i, j, k, dx * t2 / 10.0, dy * t2 / 10.0,
+                                    dz * t2 / 10.0);
+            if (collision_mask) {
               float pos[3] = {(float)i, (float)j, (float)k};
               on_water = on_water || (b == WATER && t2 == 1);
 
@@ -359,10 +360,30 @@ public:
         }
       }
     }
-    if (stop_moving) {
-      dx = dy = dz = 0;
+    if (collision_mask&1) {
+      dz=std::max(dz,0.0f);
+    }
+    
+    if (collision_mask&2) {
+      dz=std::min(dz,0.0f);
+    }
+    if (collision_mask&3) {
+      dy=std::max(dy,0.0f);
+    }
+    
+    if (collision_mask&4) {
+      dy=std::min(dy,0.0f);
+    }
+    
+    if (collision_mask&5) {
+      dx=std::max(dx,0.0f);
+    }
+    
+    if (collision_mask&6) {
+      dx=std::min(dx,0.0f);
+    }
+    if(collision_mask){
       walk_vector[0] = walk_vector[1] = walk_vector[2] = 0;
-      stop_moving = false;
       return;
     }
     dz = dz0;

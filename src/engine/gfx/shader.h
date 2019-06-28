@@ -110,8 +110,8 @@ class block_default_forward_pass{
     GL::Mesh fsquad, fullchunk;
     
     GL::Buffer _quadBuffer, _cubeBuffer;
-    bool vis[4096*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT];
-    GL::SampleQuery* q[4096*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT];
+    bool vis[1024*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT];
+    GL::SampleQuery* q[1024*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT];
     struct Vertex {
         Vector2 position;
         Vector2 textureCoordinates;
@@ -192,7 +192,7 @@ public:
                     cpos{});
             
             atlas_=&atlas;
-            for(int i=0; i<4096*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++i){
+            for(int i=0; i<1024*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++i){
                 vis[i]=false;
                 q[i]=new GL::SampleQuery{GL::SampleQuery::Target::AnySamplesPassed};
             }
@@ -437,8 +437,8 @@ public:
         
         fsquad.draw(sky);
         GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
-        std::array<int,4096> indices={0};
-        std::array<float,4096> min_depth={0.0};
+        std::array<int,1024> indices={0};
+        std::array<float,1024> min_depth={0.0};
         for(int i=0,e=all_chunks.size()*(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT); i<e; ++i){
             int j=i/(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
             int z0=i%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
@@ -460,7 +460,7 @@ public:
                 int ixc=indices[j];
                 if(!chunk->is_visible(cam,z0)){ vis[ixc]=false; continue;}
                 
-                if(!vis[ixc] || (frame++)==0 || q[ixc]->result<bool>() || (frame)%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT)==z0){
+                if(!vis[ixc] || (frame++)==0 || q[ixc]->result<bool>()){
                     vis[ixc]=true;
                     
                     gbuffer.uniform("x0", chunk->x0);
@@ -575,7 +575,7 @@ public:
             delete shadowFramebuffer[i];
         }
         
-        for(int i=0; i<4096 *constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++i){
+        for(int i=0; i<1024 *constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++i){
             delete q[i];
         }
     }

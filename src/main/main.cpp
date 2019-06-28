@@ -48,6 +48,7 @@ class game : public Platform::AndroidApplication {
 private:
   block_default_forward_pass* block_pass;
   world_view *wv_;
+  job_pool* jobs;
   world* w_;
   scene scene_;
   std::string player_name;
@@ -102,6 +103,8 @@ public:
         .generateMipmap();  
     block_pass=new block_default_forward_pass(atlas);
     load_world("world");
+    
+    jobs=new job_pool(constants::MAX_CONCURRENCY,w_);
     int x,y,z;
     spawn();
     
@@ -113,7 +116,6 @@ public:
     if (new_world) {
       w_->save_all();
     }
-    
   }
   void menu() {
     std::cout << "Enter a world name to start:";
@@ -180,7 +182,8 @@ public:
 
     //console.load_settings();
     int draw_dist = 96 ;//get_cvar("r_view_distance");
-    wv_ = new world_view(w_, scene_.get_player(0)->get_position(), draw_dist);
+    
+    wv_ = new world_view(w_, scene_.get_player(0)->get_position(), draw_dist,jobs);
     wv_->initialize_meshes();
     wv_->update_occlusion(draw_dist);
     timer::set_start();
@@ -223,7 +226,7 @@ private:
     }
     track_player();
     wv_->queue_update_stale_meshes();
-    wv_->remesh_from_queue();
+    wv_->add_remesh_jobs();
     redraw();
   } 
   virtual void drawEvent() override {

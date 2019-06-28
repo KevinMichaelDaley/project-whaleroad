@@ -213,7 +213,7 @@ public:
           if (b > WATER) {
             if (floor(x2) != target[0] || floor(y2) != target[1] ||
                 floor(z2) != target[2]) {
-              block_health = (b == STONE || b == SANDSTONE) ? 40 : 32;
+              block_health = (b == STONE || b == SANDSTONE) ? 4 : 2;
               max_block_health = block_health;
             }
             block_target_type = b;

@@ -461,6 +461,7 @@ bool world_page::set(
                   << (uint64_t)(((x-x0) % 8) * 4 +
                                 ((y-y0) % 4));
   dirty_list[(x-x0) / 8 * (int)(dim / 4) + (y-y0) / 4] |= mask; 
+  dirty_list[(x-x0) / 8 * (int)(dim / 4) + (y-y0) / 4] |= uint64_t(1u) << uint64_t(33u);
   return true;
 }
 void world_page::reset_diff() {
@@ -488,7 +489,6 @@ block_t world::get_voxel(int x, int y, int z) {
   return (z==0) ? SAND : (z < ocean_level) ? WATER : 0;
 }
 block_t &world::get_voxel(int x, int y, int z, bool &valid) {
-
   world_page* current=get_page(x,y,z);
   if (!current->nulled) {
     return current->get(x, y, z, valid);
@@ -645,7 +645,7 @@ uint64_t* world_page::has_changes_in_8x4_block(int x, int y) {
         int y1=c1+(subradius);
         for(int ix=x0; ix<=nearest_multiple(x1,64); ix+=64){
             for(int iy=y0; iy<=nearest_multiple(y1,64); iy+=64){
-                update_occlusion(ix,ix+64,iy,iy+64);
+                update_occlusion(ix,ix+64,iy,iy+64,0);
             }
         }
         
@@ -685,7 +685,9 @@ inline uint8_t sqrt8(uint8_t x){
     y+=(x>=225);
     return y;
 }
-  void world_view::update_occlusion(int x0,int x1, int y0, int y1, int D) {
+
+static int16_t inputs[constants::MAX_CONCURRENCY*84*84*constants::WORLD_HEIGHT*(constants::LIGHT_COMPONENTS+4)]={0};
+  void world_view::update_occlusion(int x0,int x1, int y0, int y1,  int tid, int D) {
         x0-=D;
         y0-=D;
         y1+=D-1 ;
@@ -699,7 +701,7 @@ inline uint8_t sqrt8(uint8_t x){
          int N=std::max(x1+1-x0,y1+1-y0);
           int N3=N;
             
-       static int16_t input[84*84*constants::WORLD_HEIGHT*(constants::LIGHT_COMPONENTS+4)]={0};
+       int16_t* input=&inputs[tid*84*84*constants::WORLD_HEIGHT*(constants::LIGHT_COMPONENTS+4)];
        int sun_depth[84*84]={0};
        bool neighbor_mask[84*84]={0};
          std::memset(neighbor_mask,0,N3*N3*sizeof(bool));
@@ -829,7 +831,7 @@ inline uint8_t sqrt8(uint8_t x){
                 int z=wld->get_z(x,y,skip_invisible_array,page);
                 const block_t* b2=&(barray[(((x-sx)*(int)dim)+(y-sy))*(int) constants::WORLD_HEIGHT]);
                 
-                constexpr int R=32  ;
+                constexpr int R=8  ;
                 uint8_t occ[5][R*R*4]={{0}};
                 int zmaxneighbor=z;
                 bool occ_any[5]={false,false,false,false,false};
@@ -1101,12 +1103,23 @@ inline uint8_t sqrt8(uint8_t x){
           (cx * constants::CHUNK_WIDTH - radius) + (center[0]*constants::CHUNK_WIDTH),
           (cy * constants::CHUNK_WIDTH - radius) + (center[1]*constants::CHUNK_WIDTH));
       reuse[j]->force_change();
-      
+      /*
           update_occlusion(reuse[j]->x0,reuse[j]->x0+constants::CHUNK_WIDTH, reuse[j]->y0,reuse[j]->y0+constants::CHUNK_WIDTH);
-      reuse[j]->update(wld);
+      reuse[j]->update(wld);*/
       ++j;
     }
   }
+  
+class mesh_update_job: public job{
+private:
+    world_view* wv;
+public:
+    mesh_update_job(world_view* wv_): wv(wv_){}
+    virtual void run(world* w, int tid){
+        wv->remesh_from_queue(tid);
+    }
+};
+
 
   void world_view::initialize_meshes() {
     int Nx=(radius/constants::CHUNK_WIDTH*2+1);
@@ -1120,13 +1133,13 @@ inline uint8_t sqrt8(uint8_t x){
         //all_visible[all_visible.size() - 1]->copy_to_gpu();
       }
     }
+    
   }
-
+    
   void world_view::queue_update_stale_meshes() { // add all meshes with stale light values
                                      // or block values to a queue for updating.
       
     int Nx=(radius/constants::CHUNK_WIDTH*2+1);
-    mesh_update_queue.reserve(all_visible.size());
     if (std::abs(center[0] - center_old[0]) >= 1) {
       update_visible_list((center[0] - center_old[0]), 0);
       center_old[0] = center[0];
@@ -1141,8 +1154,9 @@ inline uint8_t sqrt8(uint8_t x){
           
             int c1 = (dx + radius) * Nx / (int64_t) constants::CHUNK_WIDTH + (dy+radius) / (int64_t) constants::CHUNK_WIDTH;
             if(all_visible[c1]==nullptr) continue;
-            if (all_visible[c1]->is_dirty(wld)) {
-                fast_update_queue.push_back(all_visible[c1]);
+            if (all_visible[c1]->is_dirty(wld) && !all_visible[c1]->update_queued) {
+                all_visible[c1]->update_queued=true;
+                fast_update_queue.enqueue(all_visible[c1]);
             }
       }
     }
@@ -1158,57 +1172,37 @@ inline uint8_t sqrt8(uint8_t x){
                  (dy + radius) / constants::CHUNK_WIDTH;
         int c[4] = {c1, c2, c3, c4};
         for (int ix = 0; ix < 4; ++ix) {
-          bool already =
-              false; // don't add a mesh to the queue if it is already queued
-                     // for an update, that's just wasteful.
+          
           chunk_mesh *chunk = all_visible[c[ix]];
           if(chunk==nullptr) continue;
-          for (int i = mesh_update_head; i < (int) mesh_update_queue.size(); ++i) {
-            if (chunk == mesh_update_queue[i]) {
-              already = true;
-              break;
-            }
-          }
 
-          if (chunk->is_dirty(wld) && !already) {
-            mesh_update_queue.push_back(chunk);
+          if (chunk->is_dirty(wld) && !chunk->update_queued) {
+            chunk->update_queued=true;
+            mesh_update_queue.enqueue(chunk);
           }
         }
       }
     }
   }
 
-  void world_view:: remesh_from_queue() {
-
-    if ((int)mesh_update_queue.size() >= (14)) {
-      mesh_update_head += mesh_update_queue.size() / 2;
-    }
-    int num_to_update =
-        first_frame ? mesh_update_queue.size()
-                    : 2; // we don't need to update more than one chunk mesh per
-                         // frame and it takes a little while anyway
-    for (int j = 0; j < num_to_update; ++j) {
-      if (mesh_update_head < mesh_update_queue.size()) {
-        update_occlusion(mesh_update_queue[mesh_update_head]->x0,mesh_update_queue[mesh_update_head]->x0+constants::CHUNK_WIDTH, mesh_update_queue[mesh_update_head]->y0,mesh_update_queue[mesh_update_head]->y0+constants::CHUNK_WIDTH);
-        mesh_update_queue[mesh_update_head]->update(wld);
-        ++mesh_update_head;
-      } else {
-        mesh_update_queue.clear();
-        mesh_update_head = 0;
+  void world_view::add_remesh_jobs() {
+      for(int i=0; i<std::max(constants::MAX_CONCURRENCY-1,2); ++i){
+          workers->add_job(new mesh_update_job(this));
       }
-    }
-      num_to_update =
-        first_frame ? fast_update_queue.size()
-                    : 2; // now do the fast update queue
-      for (int j = 0; j < num_to_update; ++j) {
-        if (fast_update_head < fast_update_queue.size()) {
-            update_occlusion(fast_update_queue[fast_update_head]->x0,fast_update_queue[fast_update_head]->x0+constants::CHUNK_WIDTH, fast_update_queue[fast_update_head]->y0,fast_update_queue[fast_update_head]->y0+constants::CHUNK_WIDTH);
-        fast_update_queue[fast_update_head]->update(wld);
-        ++fast_update_head;
-      } else {  
-        fast_update_queue.clear();
-        fast_update_head = 0;
-      }
+  }
+  void world_view:: remesh_from_queue(int tid) {
+    chunk_mesh* mesh_update=nullptr;
+    
+    for (int j = 0; j < 2; ++j) {
+        if (!fast_update_queue.try_dequeue(mesh_update)) break;
+        update_occlusion(mesh_update->x0,mesh_update->x0+constants::CHUNK_WIDTH, mesh_update->y0,mesh_update->y0+constants::CHUNK_WIDTH,tid);
+        mesh_update->update(wld);
+    } 
+    for (int j = 0; j < 1; ++j) {
+        
+      if (!mesh_update_queue.try_dequeue(mesh_update)) break;
+        update_occlusion(mesh_update->x0,mesh_update->x0+constants::CHUNK_WIDTH, mesh_update->y0,mesh_update->y0+constants::CHUNK_WIDTH,tid);
+        mesh_update->update(wld);
     }
   
     first_frame=false;

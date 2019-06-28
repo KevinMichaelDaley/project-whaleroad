@@ -92,7 +92,6 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
     gen_instance((x), (y), (z), b2, Lsum);
   }
 }
-
 void chunk_mesh::gen(world *wld) {
   volume=0;
   for(int i=0; i<constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++i){
@@ -141,13 +140,13 @@ bool chunk_mesh::is_dirty(world *wld) {
   }
   return dirty;
 }
-void chunk_mesh::update(world* w) { gen(w); dirty=false;}
+void chunk_mesh::update(world* w) {std::lock_guard<std::mutex> lock(ready_for_gpu_copy); gen(w); dirty=false; update_queued=false;}
 struct CubeVertex {
   float x, y, z;
   float u, v;
   unsigned int face_index1, faceindex2, faceindex3;
 };
-chunk_mesh::chunk_mesh() : vbo_sz(0) {
+chunk_mesh::chunk_mesh() : vbo_sz(0), update_queued{false} {
  
   std::array<uint8_t, 6 * 2 * 3> indices;
   std::array<CubeVertex, 6 * 4> vertices;
@@ -248,11 +247,13 @@ void chunk_mesh::copy_to_gpu(int z) {
     return;
   if (vbo_sz == 0) {
     vbo_sz = constants::WORLD_HEIGHT*constants::CHUNK_WIDTH*constants::CHUNK_WIDTH;
+    std::lock_guard<std::mutex> lock(ready_for_gpu_copy);
     vertexBuffer.setData({(const void *)&verts[0], vbo_sz * sizeof(BVertex)},
                          GL::BufferUsage::DynamicDraw);
     
   } else {
     size_t N=constants::CHUNK_WIDTH*constants::CHUNK_WIDTH*constants::CHUNK_HEIGHT;
+    std::lock_guard<std::mutex> lock(ready_for_gpu_copy);
     vertexBuffer.setSubData(
         index*N*sizeof(BVertex), {(const void *)&(verts[index*N]), N * sizeof(BVertex)});
   }

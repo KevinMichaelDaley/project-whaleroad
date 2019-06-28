@@ -3,6 +3,8 @@
 #include "world_builder.h"
 #include "block_iterator.h"
 #include "common/constants.h"
+#include "common/jobs.h"
+#include "extern/concurrentqueue/concurrentqueue.h"
 #include <Magnum/Magnum.h>
 #include <Magnum/Math/Vector3.h>
 #include <cassert>
@@ -100,6 +102,7 @@ public:
 };
 
 
+
 class world_view {
 private:
   bool first_frame;
@@ -108,30 +111,29 @@ private:
   std::vector<chunk_mesh *> all_visible;
   int center[3], center_old[3];
   int radius;
-  std::vector<chunk_mesh *> mesh_update_queue;
+  moodycamel::ConcurrentQueue<chunk_mesh *> mesh_update_queue;
   
-  std::vector<chunk_mesh *> fast_update_queue;
+  moodycamel::ConcurrentQueue<chunk_mesh *> fast_update_queue;
   int mesh_update_head, fast_update_head;
+  job_pool* workers;
 public:
   world *get_world() ;
-  world_view(world* w, Vector3 center0, int rad): center{(int)(center0.x()/constants::CHUNK_WIDTH), (int)(center0.y()/constants::CHUNK_WIDTH), (int)center0.z()},
+  world_view(world* w, Vector3 center0, int rad, job_pool* workers_): center{(int)(center0.x()/constants::CHUNK_WIDTH), (int)(center0.y()/constants::CHUNK_WIDTH), (int)center0.z()},
                                                     center_old{(int)(center0.x()/constants::CHUNK_WIDTH), (int)(center0.y()/constants::CHUNK_WIDTH), (int)center0.z()}, 
                                                     wld{w},
                                                     radius{rad},
                                                     mesh_update_head{0},
                                                     fast_update_head{0},
                                                     first_frame{true},
-                                                    updated_center{true}
+                                                    updated_center{true},
+                                                    workers{workers_}
                                     {
-                                        
-                                        
-                                        
                                             
                                     }
   void update_center(Vector3 player_position) ;
   void update_occlusion(int subradius) ;
-  void update_occlusion(int x0, int x1, int y0, int y1,int D=4) ;
-
+  void update_occlusion(int x0, int x1, int y0, int y1,int tid,int D=2) ;
+  void add_remesh_jobs();
   int nearest_multiple(int x, int base) ;
   void update_visible_list(
       int dx,
@@ -139,7 +141,7 @@ public:
 
   void initialize_meshes() ;
   void queue_update_stale_meshes() ;
-  void remesh_from_queue() ;
+  void remesh_from_queue(int tid) ;
 
   const std::vector<chunk_mesh *> &get_all_visible() ;
   ~world_view();

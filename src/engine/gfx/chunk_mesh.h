@@ -7,9 +7,11 @@
 #include <Magnum/GL/DefaultFramebuffer.h>
 #include <Magnum/GL/Mesh.h>
 #include <Magnum/GL/Renderer.h>
+#include <atomic>
+#include <mutex>
 using namespace Magnum;
 class world;
-
+class world_view;
 const float FacesUV[4][2] = {{0, 0}, {0, 1}, {1, 0}, {1, 1}};
 
 const float FacesOffset[6][4][3] =
@@ -55,7 +57,11 @@ const float FacesOffset[6][4][3] =
 const float FacesNormal[6][3] = {{0, 0, -1}, {0, 0, 1},  // bottom, top
                                  {0, -1, 0}, {0, 1, 0},  // back, front
                                  {-1, 0, 0}, {1, 0, 0}}; // left, right
+
 class chunk_mesh {
+friend world_view;
+  std::atomic<bool> update_queued;
+  std::mutex ready_for_gpu_copy;
   friend class block_default_forward_pass;
   bool force_dirty, dirty;
   size_t vbo_sz;

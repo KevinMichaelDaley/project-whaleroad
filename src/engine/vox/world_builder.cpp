@@ -53,7 +53,8 @@
     return new mmap_stream(((char*)fptr)+offset_in_bytes, fsize-offset_in_bytes, STREAM_READ);
   }
 
-   stream *  world_builder::get_file_with_offset_w(Vector3i page_offset){
+  
+  stream *  world_builder::get_file_with_offset_w(Vector3i page_offset){
     uint64_t z_order_offset=mortonEncode(page_offset.x(), page_offset.y());
     ptrdiff_t offset_in_bytes=z_order_offset*sizeof(block_t);
     return new mmap_stream(((char*)fptr)+offset_in_bytes, fsize-offset_in_bytes, STREAM_WRITE);

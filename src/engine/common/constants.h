@@ -14,7 +14,7 @@ constexpr const  int LIGHT_COMPONENTS=12;
 constexpr const unsigned long long PAGE_RAM=PAGE_DIM*PAGE_DIM*(LIGHT_COMPONENTS*WORLD_HEIGHT*1+WORLD_HEIGHT*2*2+2)+(PAGE_DIM*PAGE_DIM)/32*8;
                                                         //light                                    //blocks,invisible_blocks    //dirty_list   //zmap
 constexpr const  unsigned long long ALL_PAGES_RAM=MAX_RESIDENT_PAGES*PAGE_RAM;
-constexpr const int MAX_CONCURRENCY=4;
+constexpr const int MAX_CONCURRENCY=8;
 constexpr const  int INVERSE_COMPONENTS[]={1,0,3,2,5,4};        
 constexpr const  float LPV_WEIGHT[]={
     -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -2, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0, -1, 1, 0, -1, 1, 0, -1, 1, 0, -2, 1, 0, -1, 1, 0, -1, 1, 0, -1, 1, 0, -1, -1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -2, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, -1, -1, -1, 1, 1, 1, 0, 0, 0, -1, -2, -1, 1, 1, 1, 0, 0, 0, -1, -1, -1, -1, -1, -1, -1, -2, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, -1, -1, -1, -2, -1, -1, -1, -1};

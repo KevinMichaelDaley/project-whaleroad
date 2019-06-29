@@ -1,4 +1,3 @@
-#include <immintrin.h> 
 #include "world.h"
 #include "block_iterator.h"
 #include "gfx/chunk_mesh.h"

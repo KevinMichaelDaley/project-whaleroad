@@ -1,9 +1,15 @@
 [submodule "src/extern/concurrentqueue"]
 	path = src/extern/concurrentqueue
-	url = https://github.com/moodycamel/concurrentqueue.git
+	url = https://github.com/cameron314/concurrentqueue.git
 [submodule "src/toolchains"]
 	path = src/toolchains
 	url = https://github.com/mosra/toolchains
 [submodule "src/extern/libmorton"]
 	path = src/extern/libmorton
 	url = https://github.com/Forceflow/libmorton
+[submodule "src/extern/magnum"]
+	path = src/extern/magnum
+	url = https://github.com/mosra/magnum.git
+[submodule "src/extern/corrade"]
+	path = src/extern/corrade
+	url = https://github.com/mosra/corrade.git

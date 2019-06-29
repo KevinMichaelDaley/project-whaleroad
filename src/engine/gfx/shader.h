@@ -216,7 +216,11 @@ public:
                     }
             }
             */
+#ifndef __ANDROID__
              depthStencil1.setStorage(GL::RenderbufferFormat::DepthStencil, {GL::defaultFramebuffer.viewport().sizeX(),GL::defaultFramebuffer.viewport().sizeY()});
+#else	     
+             depthStencil1.setStorage(GL::RenderbufferFormat::Depth24Stencil8, {GL::defaultFramebuffer.viewport().sizeX(),GL::defaultFramebuffer.viewport().sizeY()});
+#endif	     
             (gbuffertex = GL::Texture2D{})
             .setStorage(1, GL::TextureFormat::RGBA16F, {GL::defaultFramebuffer.viewport().sizeX(),GL::defaultFramebuffer.viewport().sizeY()})
             .setMinificationFilter(GL::SamplerFilter::Linear)

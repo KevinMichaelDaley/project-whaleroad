@@ -1,0 +1,3 @@
+include(NDK_PATH/build/cmake/android.toolchain.cmake)
+set(CMAKE_SYSROOT ${ANDROID_SYSROOT})
+set(CMAKE_SYSROOT_COMPILE "${CMAKE_SYSROOT}")

@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <mutex>
 using namespace Magnum;
 class world;
 
@@ -32,11 +33,12 @@ class world_page { // a single page of the terrain; multiple can be loaded at
   friend chunk_mesh;
 
 private:
-  bool nulled;
+  std::mutex mutex, meta_mutex;
+  std::atomic<bool> nulled;
   int x0, y0,
       z0; // the offset of the bottom-left-back corner of the page extents
   long long dim; // this is the size of the page in both x and y
-  block_t *blocks; // the array of voxels by palette index (see block.h for more
+  volatile block_t *blocks; // the array of voxels by palette index (see block.h for more
                    // info).  The block value at point P=(x+x0,y+y0,z+z0) is at
                    // index i=(x*dim+y)*WORLD_HEIGHT+z of this array.
   unsigned char *light;
@@ -65,9 +67,10 @@ public:
   bool swap();
   bool contains(int x, int y, int z);
   block_t get(int x, int y, int z);
-  block_t &get(int x, int y, int z, bool &valid);
+  volatile block_t &get(int x, int y, int z, bool &valid);
   unsigned char *get_light(int x, int y, int z);
   bool set(int x, int y, int z, block_t b, bool update_rle = true, bool update_neighborhood=true);
+  bool set_unsafe(int x, int y, int z, block_t b, bool update_rle = true, bool update_neighborhood=true);
   void reset_diff();
   uint64_t* has_changes_in_8x4_block(int x, int y);
 };
@@ -75,18 +78,22 @@ public:
 class world { // this is the class that manages the world and loads the block
               // pages.
 public:
+  std::mutex page_mutex;
   int ocean_level;
   std::array<world_page, constants::MAX_RESIDENT_PAGES> current_;
   int num_pages;
   world_page* get_page(int i, int j, int k);
+  world_page* get_page_unsafe(int i, int j, int k);
+  world_page* get_loaded_page(int i, int j, int k);
+  world_page* load_new_page(int i, int j, int k);
   unsigned char *get_light(int x, int y, int z);
-  block_t &get_voxel(int x, int y, int z, bool &valid);
+  volatile block_t &get_voxel(int x, int y, int z, bool &valid);
   block_t get_voxel(int x, int y, int z);
   bool set_voxel(int x, int y, int z, block_t b, bool update_rle = true, bool update_neighborhood=true);        
   bool cleanup(int px, int py, int pz, int vanish_dist);
   void save_all();
   int get_z(int x, int y, uint16_t *rle = nullptr, world_page* page=nullptr);
-    
+  int get_z_unsafe(int x, int y, uint16_t *rle = nullptr, world_page* page=nullptr);
   static world* load_or_create(std::string name, bool& new_world){
       world_builder::map_world_file(name, new_world);
       return new world();
@@ -96,7 +103,7 @@ public:
       num_pages=0;
       
     for(int i=0; i<(int)constants::MAX_RESIDENT_PAGES; ++i){
-        current_[i]=world_page();
+        new (&(current_[i])) world_page{};
     }
   }
 };
@@ -131,15 +138,15 @@ public:
                                             
                                     }
   void update_center(Vector3 player_position) ;
-  void update_occlusion(int subradius) ;
+  static void update_occlusion_radius(world_view* thisp, int subradius) ;
   void update_occlusion(int x0, int x1, int y0, int y1,int tid,int D=2) ;
   void add_remesh_jobs();
-  int nearest_multiple(int x, int base) ;
+  static int nearest_multiple(int x, int base) ;
   void update_visible_list(
       int dx,
       int dy) ;
 
-  void initialize_meshes() ;
+  void initialize_meshes(int subradius=48) ;
   void queue_update_stale_meshes() ;
   void remesh_from_queue(int tid) ;
 

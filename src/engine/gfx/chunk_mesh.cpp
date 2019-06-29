@@ -31,13 +31,13 @@ bool chunk_mesh::gen_instance(int x, int y, int z, block_t b,
 }
 void chunk_mesh::gen_column(int x, int y, world *wld) {
   uint16_t skip_invisible_array[constants::WORLD_HEIGHT] = {0};
-  int zmax = wld->get_z(x + x0, y + y0, skip_invisible_array);
+  int zmax = wld->get_z_unsafe(x + x0, y + y0, skip_invisible_array);
   bool valid = false;
-  block_t &b = wld->get_voxel(x + x0, y + y0, 0, valid);
+  volatile block_t &b = wld->get_voxel(x + x0, y + y0, 0, valid);
   int Nz=zmax;
   for (int z = 0; z <= (int) std::min(unsigned(zmax), unsigned(constants::WORLD_HEIGHT-1));
        z += std::max(int(skip_invisible_array[z]), 1)) {
-    block_t b2 = (&b)[z];
+    block_t b2 = __sync_fetch_and_add(&((&b)[z]),0);
 
     if (!b2 && z > (int) wld->ocean_level)
       break;

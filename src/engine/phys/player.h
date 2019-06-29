@@ -8,11 +8,8 @@ class player : public character {
   bool jump_down, w_down, a_down, s_down, d_down;
   std::string name_;
   float sensitivity;
-  camera cam;
+  
 public:
-  camera get_cam(){
-      return cam;
-  }
   int target[3];
   virtual std::string get_name(){
       return name_;
@@ -36,7 +33,7 @@ public:
     a_down = false;
     s_down = false;
     d_down = false;
-    sensitivity = 0.05f;
+    sensitivity = 0.5f;
    }
   void spawn() { spawned = true; }
   void despawn() { spawned = false; }
@@ -112,11 +109,11 @@ public:
     } else if (s_down && !w_down) {
       pedal(false, 1.8f);
     } else if (a_down && !d_down) {
-      strafe(true, 2.4);
+      strafe(false, 2.4);
     }
 
     else if (d_down && !a_down) {
-      strafe(false, 2.4);
+      strafe(true, 2.4);
     }
     if (jump_down) {
       jump(6.0f);
@@ -240,10 +237,7 @@ public:
     ((character*)this)->update_physics(dt);
     look(look_x,look_y, dt, 0);
     look_x=0;
-     look_y=0;
-    Vector3 eye, fw, up;
-    ((character*)this)->get_eye_basis(eye,fw,up);
-    cam.look_at(eye,fw,up);
+     look_y=0;  
   }
   bool right_mouse_down;
   block_t block_target_type;

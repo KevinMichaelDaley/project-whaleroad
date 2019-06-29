@@ -5,15 +5,20 @@
 #include "extern/libmorton/libmorton/include/morton.h"
 #include <Magnum/Math/Vector3.h>
 #include <Magnum/Math/Range.h>
+
+#include <Corrade/Utility/Debug.h>
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <cassert>
+
 static char* pages_ram=nullptr;
 static bool pages_allocated[constants::MAX_RESIDENT_PAGES]={false};
 char* allocate_page(){
     if(pages_ram==nullptr){
-        pages_ram=(char*)malloc(constants::ALL_PAGES_RAM);
+        pages_ram=(char*)malloc((uint64_t)constants::ALL_PAGES_RAM);
+        Debug{}<<"allocating "<<constants::ALL_PAGES_RAM<<" bytes for world storage..";
+        assert(pages_ram!=nullptr);
         for(int i=1; i<constants::MAX_RESIDENT_PAGES; ++i){
             pages_allocated[i]=false;
         }
@@ -33,7 +38,7 @@ char* allocate_page(){
 }
 
 void free_page(char* array){
-    ptrdiff_t i=((ptrdiff_t)array-(ptrdiff_t)pages_allocated)/(ptrdiff_t)constants::PAGE_RAM;
+    ptrdiff_t i=((ptrdiff_t)array-(ptrdiff_t)pages_ram)/(ptrdiff_t)constants::PAGE_RAM;
     assert(i>=0 && i < constants::MAX_RESIDENT_PAGES && pages_allocated[i]);
     pages_allocated[i]=false;
 }
@@ -113,13 +118,15 @@ void rle_compress(block_t *blocks,
 bool world_page::load() { // load the page into memory from the file (or network data) or generate
                           // it.  it's not going to have lighting yet, we have
                           // to generate that as the player moves around.
+  
+  std::lock_guard<std::mutex> page_lock(mutex);
   if (loaded) {
     return true;
   }
   nulled=false;
   loaded=true;
-  blocks = (block_t*) allocate_page();
-  std::memset(blocks, 0, (int64_t)constants::PAGE_RAM-(int64_t)(dim*dim/32*sizeof(uint64_t)));
+  blocks = (volatile block_t*) allocate_page();
+  std::memset((block_t*)blocks, 0, (int64_t)constants::PAGE_RAM-(int64_t)(dim*dim/32*sizeof(uint64_t)));
   invisible_blocks = (uint16_t*) &blocks[((uint64_t)dim *(uint64_t) dim * (uint64_t)constants::WORLD_HEIGHT)];
       
       
@@ -137,14 +144,14 @@ bool world_page::load() { // load the page into memory from the file (or network
   
   stream* f = world_builder::get_file_with_offset_r(Vector3i{x0, y0, 0});
   if (f) {
-        rle_decompress(blocks, f, dim);
+        rle_decompress((block_t*) blocks, f, dim);
         delete f;
   } else {
         //world_builder::generate(blocks, dim, {x0, y0, z0});
   }
   for (int x = 0; x < (int) dim; ++x) {
     for (int y = 0; y < (int) dim; ++y) {
-      set(x + x0, y + y0, constants::WORLD_HEIGHT-1,
+      set_unsafe(x + x0, y + y0, constants::WORLD_HEIGHT-1,
           blocks[x * dim * constants::WORLD_HEIGHT +
                  y * constants::WORLD_HEIGHT+constants::WORLD_HEIGHT-1],true,false);
       for(int k=0; k<constants::WORLD_HEIGHT-1; ++k){
@@ -172,7 +179,7 @@ bool world_page::save() { // save the current page to a file.  we generate
   if (f == nullptr) {
     return false;
   }
-  rle_compress(blocks, f, dim);
+  rle_compress((block_t*) blocks, f, dim);
   delete f;
   return true;
 }
@@ -182,21 +189,21 @@ bool world_page::swap() { // save the current page and then get rid of it so we
   // on disk but we can store certain information relevant to gameplay
   // elsewhere.
  // bool success = save();
-    if(!loaded || nulled) return true;
+    nulled=true;
+    loaded=false;
+    std::lock_guard<std::mutex> page_lock(mutex);
+    std::lock_guard<std::mutex> attr_lock(meta_mutex);
     bool success=true;
-    free_page((char*)blocks);
+    if(blocks!=nullptr) {
+        free_page((char*)blocks);
+    }
     blocks = nullptr;
     zmap = nullptr;
     light = nullptr;
     invisible_blocks=nullptr;
     dirty_list = nullptr;
     wld=nullptr;
-    loaded=false;
-    nulled=true;
     dim=0;
-    x0=0;
-    y0=0;
-    z0=0;
     return success;
 }
 bool world_page::contains(int x, int y, int z) {
@@ -222,12 +229,13 @@ block_t world_page::get(
   if (!loaded) {
     load();
   };
-  return blocks[(x - x0) * dim * constants::WORLD_HEIGHT +
-                (y - y0) * constants::WORLD_HEIGHT + z ];
+  
+  return __sync_fetch_and_add(&(blocks[(x - x0) * dim * constants::WORLD_HEIGHT +
+                (y - y0) * constants::WORLD_HEIGHT + z ]),0);
 }
 
 block_t trash[65536] = {0};
-block_t & world_page::get(
+volatile block_t & world_page::get(
     int x, int y, int z,
     bool &
         valid) { // get the block at (x,y,z) by value.  if valid comes back
@@ -272,16 +280,27 @@ uint8_t *world_page::get_light(
 bool world_page::set(
     int x, int y, int z, block_t b,
     bool update_neighboring_pvs,
-    bool update_neighborhood
-                    ) { // set a block at absolute world coordinates
-                                   // (x,y,z).  if b is negative, the block is
-                                   // assumed invisible.
+    bool update_neighborhood){
   if (!contains(x, y, z)) {
     return false;
   }
   if (!loaded){
       load();
   }
+  
+  std::lock_guard<std::mutex> page_lock(mutex);
+  return set_unsafe(x,y,z,b,update_neighboring_pvs,update_neighborhood);
+}
+    
+bool world_page::set_unsafe(
+    int x, int y, int z, block_t b,
+    bool update_neighboring_pvs,
+    bool update_neighborhood
+                    ) { // set a block at absolute world coordinates
+                                   // (x,y,z).  if b is negative, the block is
+                                   // assumed invisible.
+ 
+  
   int64_t ix = (x - x0) * (int64_t) dim * (int64_t) constants::WORLD_HEIGHT +
                 (y - y0) * (int64_t) constants::WORLD_HEIGHT + z ;
 
@@ -488,7 +507,7 @@ block_t world::get_voxel(int x, int y, int z) {
   }
   return (z==0) ? SAND : (z < ocean_level) ? WATER : 0;
 }
-block_t &world::get_voxel(int x, int y, int z, bool &valid) {
+volatile block_t &world::get_voxel(int x, int y, int z, bool &valid) {
   world_page* current=get_page(x,y,z);
   if (!current->nulled) {
     return current->get(x, y, z, valid);
@@ -509,14 +528,14 @@ bool world::set_voxel(int x, int y, int z, block_t b,
   return false;
 }
 void world::save_all() {
-  for(int i=0,e=std::min(num_pages, constants::MAX_RESIDENT_PAGES); i<e; ++i){
+  for(int i=0,e=std::min(num_pages, (int)constants::MAX_RESIDENT_PAGES); i<e; ++i){
     current_[i].swap();
   }
 }
 bool world::cleanup(int px, int py, int pz, int vanish_dist) {
   bool success = true;
   int x, y, z, d;
-  for(int i=0,e=std::min(num_pages, constants::MAX_RESIDENT_PAGES); i<e; ++i){
+  for(int i=0,e=std::min(num_pages, (int)constants::MAX_RESIDENT_PAGES); i<e; ++i){
       
     world_page* current=&(current_[i]);
     current->bounds(x, y, z, d);
@@ -532,19 +551,45 @@ bool world::cleanup(int px, int py, int pz, int vanish_dist) {
   }
   return success;
 }
-world_page* world::get_page(int x, int y, int z){
+world_page* world::get_page_unsafe(int x, int y, int z){
+    world_page* res=get_loaded_page(x,y,z);
+    if(res==nullptr){
+        return load_new_page(x,y,z);
+    }
+    return res;
+}
+world_page* world::get_loaded_page(int x, int y, int z){
     for(int i=0; i<(int)std::min(num_pages,(int)constants::MAX_RESIDENT_PAGES); ++i){
         if(current_[i].contains(x,y,0)){
                 return (&current_[i]);
         }
     }
-    current_[num_pages%constants::MAX_RESIDENT_PAGES].swap();
+    return nullptr;
+}
+world_page* world::load_new_page(int x, int y, int z){
     world_page* last_page=&(current_[num_pages%constants::MAX_RESIDENT_PAGES]);
+    last_page->swap();
     new (last_page)  world_page(nearest_multiple_down(x,constants::PAGE_DIM),nearest_multiple_down(y,constants::PAGE_DIM),0,constants::PAGE_DIM, this);
     num_pages++;
     return last_page;
 }
+world_page* world::get_page(int x, int y, int z){
+    world_page* res=get_loaded_page(x,y,z);
+    if(res==nullptr){
+        std::lock_guard<std::mutex> lock(page_mutex);
+        return load_new_page(x,y,z);
+    }
+    return res;
+}
+
 int world::get_z(int i, int j, uint16_t *skip_invisible_array,
+                 world_page *current) {
+    
+    current = get_page(i, j, 0);
+    std::lock_guard<std::mutex>(current->mutex);
+    return get_z_unsafe(i,j,skip_invisible_array,current);
+}
+int world::get_z_unsafe(int i, int j, uint16_t *skip_invisible_array,
                  world_page *current) { 
   if (current == nullptr)
     current = get_page(i, j, 0);
@@ -594,10 +639,10 @@ int world::get_z(int i, int j, uint16_t *skip_invisible_array,
       }
   }
   */
-  int zmax=current->zmap[(i-current->x0)*current->dim+(j-current->y0)];
+  int zmax=current->zmap[((i-current->x0)*current->dim)+(j-current->y0)];
   if (skip_invisible_array == nullptr) return zmax;
   
-  block_t *b = &(current->blocks[ii]);
+  volatile block_t *b = &(current->blocks[ii]);
   for (int k=0; k <= std::min(zmax, constants::WORLD_HEIGHT-k); ) { // the skippable array is stored in the world_page and
                       // updated every time we call set_block()
     int rl = current->invisible_blocks[ii + k];
@@ -635,17 +680,17 @@ uint64_t* world_page::has_changes_in_8x4_block(int x, int y) {
     center[2] = std::floor(zz);
   }
   
-  void world_view::update_occlusion(int subradius){
+  void world_view::update_occlusion_radius(world_view* wv_, int subradius){
       
-        int c0=center[0]*constants::CHUNK_WIDTH;
-        int c1=center[1]*constants::CHUNK_WIDTH;
+        int c0=wv_->center[0]*constants::CHUNK_WIDTH;
+        int c1=wv_->center[1]*constants::CHUNK_WIDTH;
         int x0=c0-(subradius);
         int y0=c1-(subradius);
         int x1=c0+(subradius);
         int y1=c1+(subradius);
-        for(int ix=x0; ix<=nearest_multiple(x1,64); ix+=64){
-            for(int iy=y0; iy<=nearest_multiple(y1,64); iy+=64){
-                update_occlusion(ix,ix+64,iy,iy+64,0);
+        for(int ix=x0; ix<=nearest_multiple(x1,32); ix+=32){
+            for(int iy=y0; iy<=nearest_multiple(y1,32); iy+=32){
+                wv_->update_occlusion(ix,ix+32,iy,iy+32,0);
             }
         }
         
@@ -686,52 +731,68 @@ inline uint8_t sqrt8(uint8_t x){
     return y;
 }
 
-static int16_t inputs[constants::MAX_CONCURRENCY*84*84*constants::WORLD_HEIGHT*(constants::LIGHT_COMPONENTS+4)]={0};
+static int16_t* inputs=nullptr;
   void world_view::update_occlusion(int x0,int x1, int y0, int y1,  int tid, int D) {
+        if(inputs==nullptr){
+            inputs=(int16_t*) malloc((uint64_t)(sizeof(int16_t)*constants::MAX_CONCURRENCY*84*84*constants::WORLD_HEIGHT*(constants::LIGHT_COMPONENTS+4)));
+        }
         x0-=D;
         y0-=D;
         y1+=D-1 ;
         x1+=D-1;
-        world_page* page=wld->get_page(x0,y0,0);
         int sx,sy,sz,dim;
         
          bool valid=false;
-         page->bounds(sx,sy,sz,dim);
-         block_t* barray=&page->get(sx,sy,0,valid);
          int N=std::max(x1+1-x0,y1+1-y0);
           int N3=N;
             
-       int16_t* input=&inputs[tid*84*84*constants::WORLD_HEIGHT*(constants::LIGHT_COMPONENTS+4)];
+       int16_t* input=&(inputs[tid*84*84*constants::WORLD_HEIGHT*(constants::LIGHT_COMPONENTS+4)]);
        int sun_depth[84*84]={0};
        bool neighbor_mask[84*84]={0};
          std::memset(neighbor_mask,0,N3*N3*sizeof(bool));
          constexpr int N2=4+constants::LIGHT_COMPONENTS;
-         uint64_t changed=page->has_changes_in_8x4_block(x0 , y0)[0];
-         unsigned i=0,j=0;
-         world_page* pages[4]={page,nullptr,nullptr,nullptr};
-         int Npages=1;
-         if(sx+dim<=x1){
-             
-             pages[1]=wld->get_page(sx+dim,y0,0);
-             Npages++;
-         }
-         if(sy+dim<=y1){
-             
-             pages[2]=wld->get_page(x0,sy+dim,0);
-             Npages++;
-             
-         }
          
-         if(sy+dim<=y1 && sx+dim<=x1){
-             
-             pages[3]=wld->get_page(sx+dim,sy+dim,0);
-             Npages++;
-             
-         }
-        for(int n=0; n<Npages; ++n){
+            world_page* pages[4]={nullptr,nullptr,nullptr,nullptr};
+            world_page* page=nullptr;
+            uint64_t changed=0;
+             volatile block_t* barray=nullptr;
+         unsigned i=0,j=0;
+        {
+            std::lock_guard<std::mutex> page_lock(wld->page_mutex);
+            page=wld->get_page_unsafe(x0,y0,0);
+            page->load();
+            pages[0]=page;
+            page->mutex.lock();
+            uint64_t changed=page->has_changes_in_8x4_block(x0 , y0)[0];
+            page->bounds(sx,sy,sz,dim);
+            barray=&page->get(sx,sy,0,valid);
             
+            if(sx+dim<=x1){
+                pages[1]=wld->get_page_unsafe(sx+dim,y0,0);
+                pages[1]->load();
+                pages[1]->mutex.lock();
+            }
+            if(sy+dim<=y1){
+                pages[2]=wld->get_page_unsafe(x0,sy+dim,0);
+                pages[2]->load();
+                pages[2]->mutex.lock();
+                
+            }
+            
+            if(sy+dim<=y1 && sx+dim<=x1){
+                
+                pages[3]=wld->get_page_unsafe(sx+dim,sy+dim,0);
+                pages[3]->load();
+                pages[3]->mutex.lock();
+                
+            }
+        }
+        for(int n=0; n<4; ++n){
+            
+            //std::lock_guard<std::mutex> page_lock(pages[n]->mutex);
             if(pages[n]==nullptr) continue;
             pages[n]->bounds(sx,sy,sz,dim);
+            
             barray=&(pages[n]->get(sx,sy,0,valid));
             page=pages[n];
             for(int x=std::max(x0,sx); x<=std::min(x1, sx+dim-1); ++x){
@@ -761,7 +822,7 @@ static int16_t inputs[constants::MAX_CONCURRENCY*84*84*constants::WORLD_HEIGHT*(
         i=0; j=0;
         
        
-        for(int n=0; n<Npages; ++n){
+        for(int n=0; n<4; ++n){
             
             if(pages[n]==nullptr) continue;
             pages[n]->bounds(sx,sy,sz,dim);
@@ -784,17 +845,16 @@ static int16_t inputs[constants::MAX_CONCURRENCY*84*84*constants::WORLD_HEIGHT*(
                 uint8_t* Lbase=page->get_light(x,y,0);
                    
                 uint16_t skip_invisible_array[constants::WORLD_HEIGHT]={0};
-                int z=wld->get_z(x,y,skip_invisible_array,page);
-                const block_t* b2=&(barray[(((x-sx)*(int)dim)+(y-sy))*(int) constants::WORLD_HEIGHT]);
+                int z=wld->get_z_unsafe(x,y,skip_invisible_array,page);
+                volatile block_t* b2=&(barray[(((x-sx)*(int)dim)+(y-sy))*(int) constants::WORLD_HEIGHT]);
                 
                 for(int k=0; k<=std::min(z-1,constants::WORLD_HEIGHT-1); k+=std::max((int)skip_invisible_array[k],1)){
                         
-                        int blk=std::abs(b2[k]);     
+                        int blk=std::abs(__sync_add_and_fetch(&(b2[k]),0));     
                         for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
                             input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+m]=255-(int)Lbase[k*constants::LIGHT_COMPONENTS+m];
                         }
                         input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+constants::LIGHT_COMPONENTS]=(block_is_opaque(blk))?255:0;
-                        input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+1+constants::LIGHT_COMPONENTS]=(int)block_emissive_strength(blk);
                         input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+2+constants::LIGHT_COMPONENTS]=std::max((int)skip_invisible_array[k],0);   
                         //input[((i*N3+j)*constants::WORLD_HEIGHT+k)*N2+3+constants::LIGHT_COMPONENTS]=block_sound_absorption(blk);
                         if(!blk){   
@@ -807,7 +867,8 @@ static int16_t inputs[constants::MAX_CONCURRENCY*84*84*constants::WORLD_HEIGHT*(
         }
                     
         
-        for(int n=0; n<Npages; ++n){
+        for(int n=0; n<4; ++n){
+            //std::lock_guard<std::mutex> page_lock(pages[n]->mutex);
             if(pages[n]==nullptr) continue;
             pages[n]->bounds(sx,sy,sz,dim);
             barray=&(pages[n]->get(sx,sy,0,valid));
@@ -828,10 +889,9 @@ static int16_t inputs[constants::MAX_CONCURRENCY*84*84*constants::WORLD_HEIGHT*(
                 Lbase=page->get_light(x,y,0);
                 int max_delta=0;
                 uint16_t skip_invisible_array[constants::WORLD_HEIGHT]={0};
-                int z=wld->get_z(x,y,skip_invisible_array,page);
-                const block_t* b2=&(barray[(((x-sx)*(int)dim)+(y-sy))*(int) constants::WORLD_HEIGHT]);
-                
-                constexpr int R=8  ;
+                int z=wld->get_z_unsafe(x,y,skip_invisible_array,page);
+                volatile block_t* b2=&(barray[(((x-sx)*(int)dim)+(y-sy))*(int) constants::WORLD_HEIGHT]);
+                constexpr int R=8;
                 uint8_t occ[5][R*R*4]={{0}};
                 int zmaxneighbor=z;
                 bool occ_any[5]={false,false,false,false,false};
@@ -928,16 +988,18 @@ static int16_t inputs[constants::MAX_CONCURRENCY*84*84*constants::WORLD_HEIGHT*(
                     int ixz=1;
                     
                     
-                    for(int m=1; m<constants::LIGHT_COMPONENTS; m+=6){
+                    for(int m=1; m<6; m+=1){
                                 ao=0;
                                 if(!occ_any[m-1]){
-                            
+                                
                                 //if(FacesOffset[m%6][2]<0) continue;
                                     int Lold=Lbase[(k+1)*constants::LIGHT_COMPONENTS+m];
                                     max_delta=std::max(max_delta,std::abs(255-(int)Lold));
                                     Lbase[(k)*constants::LIGHT_COMPONENTS+m]=255u;
                                     
                                     input[((i*N3+j)*constants::WORLD_HEIGHT+k+1)*N2+m]=0u;
+                                    
+                                    input[((i*N3+j)*constants::WORLD_HEIGHT+k+1)*N2+m+6]=0u;
                                 }
                                 
                            //std::cerr<<k<<" "<<ao<<" \n";  
@@ -946,7 +1008,7 @@ static int16_t inputs[constants::MAX_CONCURRENCY*84*84*constants::WORLD_HEIGHT*(
                         
                         
                                     for(int bit=0; bit<R*R*4; ++bit){
-                                        uint8_t dzw=~occ[m-1][bit];
+                                        uint8_t dzw=~occ[m%6-1][bit];
                                         ao+=dzw;
                                     }
                                     ao=std::min(((ao))/(R*R*4),255);
@@ -957,6 +1019,7 @@ static int16_t inputs[constants::MAX_CONCURRENCY*84*84*constants::WORLD_HEIGHT*(
                                     max_delta=std::max(max_delta,std::abs((int)ao-(int)Lold));
                                     Lbase[(k)*constants::LIGHT_COMPONENTS+m]=ao;  
                                     input[((i*N3+j)*constants::WORLD_HEIGHT+k+1)*N2+m]=255-ao;
+                                    input[((i*N3+j)*constants::WORLD_HEIGHT+k+1)*N2+m+6]=255-ao;
                                 
                                 if(m==1) aotop=ao;
                     }
@@ -973,10 +1036,12 @@ static int16_t inputs[constants::MAX_CONCURRENCY*84*84*constants::WORLD_HEIGHT*(
                             for(int m=0; m<constants::LIGHT_COMPONENTS; ++m){
                                 L0[m]=Lbase[k*constants::LIGHT_COMPONENTS+m];
                             }
-                            if(b2[k]<0){
+                            
+                            int blk=__sync_add_and_fetch(&(b2[k]),0);   
+                            if(blk<0){
                                 continue;
                             }   
-                            if(block_is_opaque(std::abs(b2[k]))){
+                            if(block_is_opaque(std::abs(blk))){
                                 continue;
                             }
                             for(int nm=0; nm<6; ++nm){
@@ -1031,6 +1096,11 @@ static int16_t inputs[constants::MAX_CONCURRENCY*84*84*constants::WORLD_HEIGHT*(
                 }
             }
                
+        }   
+        for(int i=0; i<4; ++i){
+            if(pages[i]!=nullptr){
+                pages[i]->mutex.unlock();
+            }
         }   
         
 
@@ -1121,15 +1191,25 @@ public:
 };
 
 
-  void world_view::initialize_meshes() {
+  void world_view::initialize_meshes(int subradius) {
     int Nx=(radius/constants::CHUNK_WIDTH*2+1);
     for (int i = -radius; i <= radius; i += constants::CHUNK_WIDTH) {
       ++Nx;
       for (int j = -radius; j <= radius; j += constants::CHUNK_WIDTH) {
-        all_visible.push_back(new chunk_mesh());
-        all_visible[all_visible.size() - 1]->start_at(i + center[0]*constants::CHUNK_WIDTH,
+
+            all_visible.push_back(new chunk_mesh());
+            all_visible[all_visible.size() - 1]->start_at(i + center[0]*constants::CHUNK_WIDTH,
                                                       j + center[1]*constants::CHUNK_WIDTH);
-        all_visible[all_visible.size() - 1]->update(wld);
+            int r=(std::abs(i)+std::abs(j))/std::sqrt(2.0);//taxicab distance -> half-width of the 45-degree-from-axis-aligned square around the origin containing x.
+            if(subradius>=r){
+                
+                all_visible[all_visible.size() - 1]->update(wld);
+            }
+            else{
+                all_visible[all_visible.size() - 1]->update_queued=true;
+                mesh_update_queue.enqueue(all_visible[all_visible.size() - 1]);
+            }
+                
         //all_visible[all_visible.size() - 1]->copy_to_gpu();
       }
     }
@@ -1148,13 +1228,12 @@ public:
       update_visible_list(0, (center[1] - center_old[1]));
       center_old[1] = center[1];
     }
-    
     for (int dx = -32; dx <= 32; dx += constants::CHUNK_WIDTH) {
       for (int dy = -32; dy <= 32; dy += constants::CHUNK_WIDTH) {
           
             int c1 = (dx + radius) * Nx / (int64_t) constants::CHUNK_WIDTH + (dy+radius) / (int64_t) constants::CHUNK_WIDTH;
             if(all_visible[c1]==nullptr) continue;
-            if (all_visible[c1]->is_dirty(wld) && !all_visible[c1]->update_queued) {
+            if (all_visible[c1]->is_dirty(wld)) {
                 all_visible[c1]->update_queued=true;
                 fast_update_queue.enqueue(all_visible[c1]);
             }
@@ -1193,12 +1272,12 @@ public:
   void world_view:: remesh_from_queue(int tid) {
     chunk_mesh* mesh_update=nullptr;
     
-    for (int j = 0; j < 2; ++j) {
+    for (int j = 0; j < 5; ++j) {
         if (!fast_update_queue.try_dequeue(mesh_update)) break;
         update_occlusion(mesh_update->x0,mesh_update->x0+constants::CHUNK_WIDTH, mesh_update->y0,mesh_update->y0+constants::CHUNK_WIDTH,tid);
         mesh_update->update(wld);
     } 
-    for (int j = 0; j < 1; ++j) {
+    for (int j = 0; j < 5; ++j) {
         
       if (!mesh_update_queue.try_dequeue(mesh_update)) break;
         update_occlusion(mesh_update->x0,mesh_update->x0+constants::CHUNK_WIDTH, mesh_update->y0,mesh_update->y0+constants::CHUNK_WIDTH,tid);

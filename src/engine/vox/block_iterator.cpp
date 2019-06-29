@@ -24,7 +24,7 @@ void block_iterator::iter_columns(world *wld, Magnum::Range3Di bounds, block_ite
       bool valid = false;   
       int sx,sy,sz,dim;
       page->bounds(sx,sy,sz,dim);
-      block_t &bref = page->get(x, y, 0, valid);
+      block_t &bref = *((block_t*) &(page->get(x, y, 0, valid)));
       if(!valid){
           continue;
       }

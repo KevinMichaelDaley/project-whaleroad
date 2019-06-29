@@ -1,6 +1,7 @@
 #include "common/timer.h"
 #include "common/entity.h"
 #include "vox/world.h"
+#include "gfx/camera.h" 
 #include <Magnum/Math/Quaternion.h>
 #include <Magnum/Math/Vector3.h>
 #ifndef __ANDROID__
@@ -14,6 +15,7 @@
 
 
 class character : public entity {
+protected:
   float health;
   bool can_climb;
   float x[3], xdot[3];
@@ -40,7 +42,15 @@ class character : public entity {
   bool first_frame;
   Vector3 up_vector;
   world* wld_;
+  camera cam;
+  
+  
+  float look_pitch,look_yaw;
 public:
+    
+  camera get_cam(){
+      return cam;
+  }
   world* get_world(){
       return wld_;
   }
@@ -458,23 +468,14 @@ public:
              look_vector[2] * look_vector[2] * under_water);
     ;
   }
-  void look(float x, float y, float dt, int which_head) {
-    Magnum::Math::Vector3<float> whichway, up{0, 0, 1},
-        fwd{look_vector[0], look_vector[1], look_vector[2]},
-        up2{up_vector[0], up_vector[1], up_vector[2]};
-    whichway = Magnum::Math::cross<float>(up, fwd);
-    auto a = Magnum::Math::Quaternion<float>::rotation(
-        Magnum::Math::Rad<float>(2.0f * M_PI * y * dt), whichway.normalized());
-    auto b = Magnum::Math::Quaternion<float>::rotation(
-        Magnum::Math::Rad<float>(-2.0f * M_PI * x * dt), up.normalized());
-    fwd = (a * b).transformVectorNormalized(fwd.normalized());
-    up2 = (a * b).transformVectorNormalized(up2.normalized());
-    look_vector[0] = fwd.x();
-    look_vector[1] = fwd.y();
-    look_vector[2] = fwd.z();
-    //up_vector[0] = up2.x();
-    //up_vector[1] = up2.y();
-    //up_vector[2] = up2.z();
+  void look(float look_x, float look_y, float dt, int which_head) {
+    look_pitch-=look_y*dt;
+    look_yaw-=look_x*dt;
+    cam.fps(get_position(),std::max(std::min(look_pitch,M_PI/2.0f),-M_PI/2.0f),look_yaw);
+    Vector4 eye_dir=(cam.view.invertedRigid()*Vector4{0,0,-1,0}).normalized();
+    look_vector[0]=eye_dir.x();
+    look_vector[1]=eye_dir.y();
+    look_vector[2]=eye_dir.z();
   } /*
   void look(float x, float y, float dt, int which_head) {
           float q[4];

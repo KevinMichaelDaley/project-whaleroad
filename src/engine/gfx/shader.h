@@ -110,8 +110,10 @@ class block_default_forward_pass{
     GL::Mesh fsquad, fullchunk;
     
     GL::Buffer _quadBuffer, _cubeBuffer;
-    bool vis[1024*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT];
-    GL::SampleQuery* q[1024*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT];
+    std::vector<int> vis;
+    std::vector<int> indices;
+    std::vector<double> min_depth;
+    std::vector<GL::SampleQuery*> q;
     struct Vertex {
         Vector2 position;
         Vector2 textureCoordinates;
@@ -192,10 +194,6 @@ public:
                     cpos{});
             
             atlas_=&atlas;
-            for(int i=0; i<1024*constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++i){
-                vis[i]=false;
-                q[i]=new GL::SampleQuery{GL::SampleQuery::Target::AnySamplesPassed};
-            }
             /*
             for(int l=0; l<SHADOW_CASCADES; ++l){
                
@@ -436,21 +434,25 @@ public:
         GBuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth).bind();
         
         fsquad.draw(sky);
+        indices.clear();
+        min_depth.clear();
+        vis.resize(all_chunks.size(),0);
         GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
-        std::array<int,1024> indices={0};
-        std::array<float,1024> min_depth={0.0};
         for(int i=0,e=all_chunks.size()*(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT); i<e; ++i){
             int j=i/(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
             int z0=i%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
-            indices[i]=i;
+            indices.push_back(i);
             float z=all_chunks[j]->min_depth(cam,z0);
-            min_depth[i]=z;            
+            min_depth.push_back(z);            
+           
         }
-        
+         while(q.size()<all_chunks.size()*(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT)){
+                q.push_back(new GL::SampleQuery{GL::SampleQuery::Target::AnySamplesPassed});
+        }
                     
         passthrough.uniform("transform", viewproj);  
-        std::sort(indices.begin(), indices.begin()+all_chunks.size()*(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT), [min_depth](int i, int j){return min_depth[i]<min_depth[j];});
-        for(int j=0,e=all_chunks.size()*(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT); j<e; ++j){
+        std::sort(indices.begin(), indices.end(), [this](int i, int j){return this->min_depth[i]<this->min_depth[j];});
+        for(int j=0,e=indices.size(); j<e; ++j){
                 int i=indices[j]/(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
                 int z0=indices[j]%(constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT);
                 chunk_mesh* chunk=all_chunks[i];
@@ -458,11 +460,10 @@ public:
                 if(chunk==nullptr) continue;
             
                 int ixc=indices[j];
-                if(!chunk->is_visible(cam,z0)){ vis[ixc]=false; continue;}
-                
-                if(!vis[ixc] || (frame++)==0 || q[ixc]->result<bool>()){
+                if(!chunk->is_visible(cam,z0)){ vis[ixc]=0; continue;}
+                vis[ixc]++;
+                if(vis[ixc]<2  ||  q[ixc]->result<bool>()){
                     vis[ixc]=true;
-                    
                     gbuffer.uniform("x0", chunk->x0);
                     gbuffer.uniform("y0", chunk->y0);
                     gbuffer.uniform("z0",z0*constants::CHUNK_HEIGHT);
@@ -474,9 +475,6 @@ public:
                 else{
                     glColorMask(false,false,false,false);
                     glDepthMask(false);
-                    glStencilMask(0);
-                    
-                    
                     passthrough.uniform("x0",chunk->x0);
                     passthrough.uniform("y0",chunk->y0);
                     passthrough.uniform("z0",z0*constants::CHUNK_HEIGHT);
@@ -485,7 +483,6 @@ public:
                     q[ixc]->end();
                     glColorMask(true,true,true,true);
                     glDepthMask(true);
-                    glStencilMask(~0);
                 }
          }
          /*
@@ -575,7 +572,7 @@ public:
             delete shadowFramebuffer[i];
         }
         
-        for(int i=0; i<1024 *constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT; ++i){
+        for(int i=0,e=q.size(); i<e; ++i){
             delete q[i];
         }
     }

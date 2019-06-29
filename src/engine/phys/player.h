@@ -8,18 +8,16 @@ class player : public character {
   bool jump_down, w_down, a_down, s_down, d_down;
   std::string name_;
   float sensitivity;
-  
+
 public:
   int target[3];
-  virtual std::string get_name(){
-      return name_;
-  }
-  player(std::string name, world* wld, int sx = 0, int sy = 0, int sz = 0,
+  virtual std::string get_name() { return name_; }
+  player(std::string name, world *wld, int sx = 0, int sy = 0, int sz = 0,
          bool spawn_random = true, bool spawn_on_surface = true)
       : jump_speed(3.0f), name_(name),
         character(wld, sx, sy, sz, spawn_random, spawn_on_surface) {
     block_last = 0;
-    lag=0;
+    lag = 0;
     place_block = STONE;
     left_mouse_down = false;
     right_mouse_down = false;
@@ -34,7 +32,7 @@ public:
     s_down = false;
     d_down = false;
     sensitivity = 0.5f;
-   }
+  }
   void spawn() { spawned = true; }
   void despawn() { spawned = false; }
   bool is_in_world() { return spawned; }
@@ -63,15 +61,13 @@ public:
     else if (k == keycode_t::C) {
       toggle_climbing();
     }
-    
+
     else if (k == keycode_t::One) {
-       place_block=GRASS;
-    }
-    else if (k == keycode_t::Two) {
-       place_block=STONE;
-    }
-    else if (k == keycode_t::Three) {
-       place_block=DIRT;
+      place_block = GRASS;
+    } else if (k == keycode_t::Two) {
+      place_block = STONE;
+    } else if (k == keycode_t::Three) {
+      place_block = DIRT;
     }
   }
   void keyup(keycode_t k) {
@@ -80,7 +76,6 @@ public:
     } else if (k == keycode_t::W) {
       w_down = false;
     }
-    
 
     else if (k == keycode_t::A) {
       a_down = false;
@@ -96,8 +91,8 @@ public:
   }
 #endif
   void mousemove(int x, int y) {
-    look_x += x *sensitivity;
-    look_y += y *sensitivity;
+    look_x += x * sensitivity;
+    look_y += y * sensitivity;
   }
   double block_last;
   int lag;
@@ -119,7 +114,7 @@ public:
       jump(6.0f);
       jump_down = false;
     }
-    viewProj=cam.projection*cam.view;
+    viewProj = cam.projection * cam.view;
     if (left_mouse_down) {
       float xx, yy, zz;
       float rx, ry, rz;
@@ -153,7 +148,9 @@ public:
         if (t > sqrt(2) && t < 10 && place_block > AIR && target[2] > 0) {
           float dot = -1;
           Vector3 nml, I{xx - target[0], yy - target[1], zz - target[2]};
-          constexpr float FacesNormal[6][3]={{1,0,0},{-1,0,0},{0,1,0}, {0, -1,0}, {0,0,1}, {0,0,-1}};
+          constexpr float FacesNormal[6][3] = {{1, 0, 0}, {-1, 0, 0},
+                                               {0, 1, 0}, {0, -1, 0},
+                                               {0, 0, 1}, {0, 0, -1}};
           for (int face = 0; face < 6; ++face) {
             Vector3 n = {FacesNormal[face][0], FacesNormal[face][1],
                          FacesNormal[face][2]};
@@ -168,12 +165,12 @@ public:
               }
             }
           }
-          if (dot > 0 && lag<0) {
+          if (dot > 0 && lag < 0) {
             // if(inventory.has(place_block,1);
             wld->set_voxel(std::floor(target[0] + 0.5 + nml.x()),
                            std::floor(target[1] + 0.5 + nml.y()),
                            std::floor(target[2] + 0.5 + nml.z()), place_block);
-            lag=50;
+            lag = 50;
           }
 
           // inventory.remove(place_block,1);
@@ -234,10 +231,10 @@ public:
         }
       }
     }
-    ((character*)this)->update_physics(dt);
-    look(look_x,look_y, dt, 0);
-    look_x=0;
-     look_y=0;  
+    ((character *)this)->update_physics(dt);
+    look(look_x, look_y, dt, 0);
+    look_x = 0;
+    look_y = 0;
   }
   bool right_mouse_down;
   block_t block_target_type;

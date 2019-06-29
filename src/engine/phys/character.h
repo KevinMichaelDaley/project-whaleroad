@@ -1,7 +1,7 @@
-#include "common/timer.h"
 #include "common/entity.h"
+#include "common/timer.h"
+#include "gfx/camera.h"
 #include "vox/world.h"
-#include "gfx/camera.h" 
 #include <Magnum/Math/Quaternion.h>
 #include <Magnum/Math/Vector3.h>
 #ifndef __ANDROID__
@@ -12,7 +12,6 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
 #define M_PI 3.14159265358979323846f
-
 
 class character : public entity {
 protected:
@@ -41,33 +40,29 @@ protected:
   bool under_water;
   bool first_frame;
   Vector3 up_vector;
-  world* wld_;
+  world *wld_;
   camera cam;
-  
-  
-  float look_pitch,look_yaw;
+
+  float look_pitch, look_yaw;
+
 public:
-    
-  camera get_cam(){
-      return cam;
+  camera get_cam() { return cam; }
+  world *get_world() { return wld_; }
+  void dir(float &rx, float &ry, float &rz) {
+    rx = look_vector[0];
+    ry = look_vector[1];
+    rz = look_vector[2];
   }
-  world* get_world(){
-      return wld_;
+  void eye(float &rx, float &ry, float &rz) {
+    rx = eye_positions[0] + x[0];
+    ry = eye_positions[1] + x[1];
+    rz = eye_positions[2] + x[2];
   }
-  void dir(float& rx, float& ry, float& rz){
-      rx=look_vector[0];
-      ry=look_vector[1];
-      rz=look_vector[2];
-  }
-  void eye(float& rx, float& ry, float& rz){
-      rx=eye_positions[0]+x[0];
-      ry=eye_positions[1]+x[1];
-      rz=eye_positions[2]+x[2];
-  }
-  character(world* wld, float xx = 0, float yy = 0, float zz = 0, bool spawn_random = true,
-            bool spawn_on_surface = true, float rx = 0.4, float ry = 0.4,
-            float rz = 0.8, float eye_height = 0.6, float angle = 0){
-    wld_=wld;
+  character(world *wld, float xx = 0, float yy = 0, float zz = 0,
+            bool spawn_random = true, bool spawn_on_surface = true,
+            float rx = 0.4, float ry = 0.4, float rz = 0.8,
+            float eye_height = 0.6, float angle = 0) {
+    wld_ = wld;
     first_frame = true;
     health = 1.0f;
     if (spawn_random) {
@@ -75,17 +70,17 @@ public:
       yy = ((rand() % 10)) + 1000;
     }
     if (spawn_on_surface || spawn_random) {
-      wld->get_voxel(xx,yy,0);
-      zz = std::max(std::max(get_world()->get_z(xx, yy,nullptr,nullptr)+3,
+      wld->get_voxel(xx, yy, 0);
+      zz = std::max(std::max(get_world()->get_z(xx, yy, nullptr, nullptr) + 3,
                              get_world()->ocean_level),
                     1);
     }
     set_position(xx, yy, zz);
     set_velocity(0.0f, 0.0f, 0.0f);
     collide_with_entire_base = true;
-      look_vector[0] = cos(angle);
-      look_vector[1] = sin(angle);
-      look_vector[2] = 0.0f;
+    look_vector[0] = cos(angle);
+    look_vector[1] = sin(angle);
+    look_vector[2] = 0.0f;
     terminal_velocity = 50.0f;
     friction = 0.9f;
     fall_start = now();
@@ -111,19 +106,18 @@ public:
     jump_start = now();
     jump_ = false;
   }
-  void get_eye_basis(Vector3& eye, Vector3& fwd, Vector3& up){
-      eye=Vector3{eye_positions[0]+x[0], eye_positions[1]+x[1], eye_positions[2]+x[2]};
-      fwd=Vector3{look_vector[0], look_vector[1], look_vector[2]};
-      up=Vector3{up_vector[0], up_vector[1], up_vector[2]};
+  void get_eye_basis(Vector3 &eye, Vector3 &fwd, Vector3 &up) {
+    eye = Vector3{eye_positions[0] + x[0], eye_positions[1] + x[1],
+                  eye_positions[2] + x[2]};
+    fwd = Vector3{look_vector[0], look_vector[1], look_vector[2]};
+    up = Vector3{up_vector[0], up_vector[1], up_vector[2]};
   }
   void set_position(float xx, float yy, float zz) {
     x[0] = xx;
     x[1] = yy;
     x[2] = zz;
   }
-  Vector3 get_position(){
-      return Vector3{x[0],x[1],x[2]};
-  }
+  Vector3 get_position() { return Vector3{x[0], x[1], x[2]}; }
   void set_velocity(float dx, float dy, float dz) {
     xdot[0] = dx;
     xdot[1] = dy;
@@ -162,9 +156,9 @@ public:
     return std::sqrt(x2[0] * x2[0] + x2[1] * x2[1] + x2[2] * x2[2]) - radius_x;
   }
   int8_t collides_with_block(float xx, float yy, float zz, float dx, float dy,
-                           float dz) {
+                             float dz) {
     float d = 1.0 / 1;
-    int8_t mask=0;
+    int8_t mask = 0;
     if (zz > (x[2] + height + dz) || zz + d < x[2] + dz) {
       return false;
     }
@@ -184,8 +178,8 @@ public:
       Vector3 a{xx + offsets[face][0][0], yy + offsets[face][0][1], 0};
       Vector3 b{xx + offsets[face][1][0], yy + offsets[face][1][1], 0};
       if ((c - a).projected(b - a).length() <= radius_x) {
-        mask|=face;
-        collides_xy=true;
+        mask |= face;
+        collides_xy = true;
       }
     }
     if (!collides_xy) {
@@ -199,11 +193,11 @@ public:
     }
 
     if (zz > (x[2] + dz) && zz < (x[2] + dz + height)) {
-      mask|=0;
+      mask |= 0;
     }
 
     if (zz + d > (x[2] + dz) && zz + 1 < (x[2] + dz + height)) {
-      mask|=1;
+      mask |= 1;
     }
     return mask;
   }
@@ -260,8 +254,8 @@ public:
              xx0 + 1;
     int Ny = std::ceil(x[1] + std::max(dy * 10.0f / 10.0f, 0.0f) + radius_y) -
              yy0 + 1;
-    int Nz =
-        std::floor(x[2] + std::max(dz1 * 10.0f, 0.0f) / 10.0 + height) + 1 - zz0;
+    int Nz = std::floor(x[2] + std::max(dz1 * 10.0f, 0.0f) / 10.0 + height) +
+             1 - zz0;
     /*
     std::vector<float> d, d2;
     d.reserve(Nx*Ny*Nz*64);
@@ -317,7 +311,7 @@ public:
     }*/
     int t2 = 0;
     float dz;
-    int8_t collision_mask=0;
+    int8_t collision_mask = 0;
     for (t2 = 1; (t2 < 32) && !stop_moving; t2 += 2) {
       dz = std::max(dz0 - dt * dt * 9.81f * (t2 * t2 / 100.0f) / 2.0f *
                               gravity_multiplier,
@@ -354,8 +348,8 @@ public:
             }
 
             int face = 0;
-            collision_mask|=collides_with_block(i, j, k, dx * t2 / 10.0, dy * t2 / 10.0,
-                                    dz * t2 / 10.0);
+            collision_mask |= collides_with_block(
+                i, j, k, dx * t2 / 10.0, dy * t2 / 10.0, dz * t2 / 10.0);
             if (collision_mask) {
               float pos[3] = {(float)i, (float)j, (float)k};
               on_water = on_water || (b == WATER && t2 == 1);
@@ -370,29 +364,29 @@ public:
         }
       }
     }
-    if (collision_mask&1) {
-      dz=std::max(dz,0.0f);
+    if (collision_mask & 1) {
+      dz = std::max(dz, 0.0f);
     }
-    
-    if (collision_mask&2) {
-      dz=std::min(dz,0.0f);
+
+    if (collision_mask & 2) {
+      dz = std::min(dz, 0.0f);
     }
-    if (collision_mask&3) {
-      dy=std::max(dy,0.0f);
+    if (collision_mask & 3) {
+      dy = std::max(dy, 0.0f);
     }
-    
-    if (collision_mask&4) {
-      dy=std::min(dy,0.0f);
+
+    if (collision_mask & 4) {
+      dy = std::min(dy, 0.0f);
     }
-    
-    if (collision_mask&5) {
-      dx=std::max(dx,0.0f);
+
+    if (collision_mask & 5) {
+      dx = std::max(dx, 0.0f);
     }
-    
-    if (collision_mask&6) {
-      dx=std::min(dx,0.0f);
+
+    if (collision_mask & 6) {
+      dx = std::min(dx, 0.0f);
     }
-    if(collision_mask){
+    if (collision_mask) {
       walk_vector[0] = walk_vector[1] = walk_vector[2] = 0;
       return;
     }
@@ -432,9 +426,7 @@ public:
     x[1] += dy;
     x[2] += dz;
   }
-  virtual void update(float dt){
-      update_physics(dt);
-  }
+  virtual void update(float dt) { update_physics(dt); }
   void apply_impulse(float x, float y, float z) {
     xdot[1] += y;
     xdot[0] += x;
@@ -469,13 +461,16 @@ public:
     ;
   }
   void look(float look_x, float look_y, float dt, int which_head) {
-    look_pitch-=look_y*dt;
-    look_yaw-=look_x*dt;
-    cam.fps(get_position(),std::max(std::min(look_pitch,M_PI/2.0f),-M_PI/2.0f),look_yaw);
-    Vector4 eye_dir=(cam.view.invertedRigid()*Vector4{0,0,-1,0}).normalized();
-    look_vector[0]=eye_dir.x();
-    look_vector[1]=eye_dir.y();
-    look_vector[2]=eye_dir.z();
+    look_pitch -= look_y * dt;
+    look_yaw -= look_x * dt;
+    cam.fps(get_position(),
+            std::max(std::min(look_pitch, M_PI / 2.0f), -M_PI / 2.0f),
+            look_yaw);
+    Vector4 eye_dir =
+        (cam.view.invertedRigid() * Vector4{0, 0, -1, 0}).normalized();
+    look_vector[0] = eye_dir.x();
+    look_vector[1] = eye_dir.y();
+    look_vector[2] = eye_dir.z();
   } /*
   void look(float x, float y, float dt, int which_head) {
           float q[4];
@@ -499,5 +494,3 @@ public:
   void toggle_flying() { flying = !flying; }
   void toggle_climbing() { climbing = !climbing; }
 };
-
-

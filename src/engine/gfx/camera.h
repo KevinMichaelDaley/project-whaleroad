@@ -1,6 +1,6 @@
 #pragma once
-#include "Magnum/Math/Matrix4.h"
 #include "Magnum/Magnum.h"
+#include "Magnum/Math/Matrix4.h"
 #include <algorithm>
 using namespace Magnum;
 struct camera {
@@ -18,6 +18,6 @@ struct camera {
   void look_at(Vector3 eye_position, Vector3 eye_direction, Vector3 up);
   bool frustum_cull_box(Range3D box);
   camera();
-  void fps( Vector3 eye, float pitch, float yaw );
+  void fps(Vector3 eye, float pitch, float yaw);
   Vector4 screen_to_world(Vector4 u);
 };

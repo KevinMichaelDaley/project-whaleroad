@@ -24,10 +24,10 @@ bool does_box_intersect_sphere(Range3D box, Vector3 sphere_center,
   return dist_squared > 0;
 }
 
-bool is_chunk_outside_frustum(int x0, int y0, std::array<plane_t, 6> frustumPlanes) {
-  plane_t absFrustumPlanes[6];
-  for (unsigned int plane = 0; plane < 6; ++plane) {
-    absFrustumPlanes[plane].n = Vector3{std::abs(frustumPlanes[plane].n.x()),
+bool is_chunk_outside_frustum(int x0, int y0, std::array<plane_t, 6>
+frustumPlanes) { plane_t absFrustumPlanes[6]; for (unsigned int plane = 0; plane
+< 6; ++plane) { absFrustumPlanes[plane].n =
+Vector3{std::abs(frustumPlanes[plane].n.x()),
                                         std::abs(frustumPlanes[plane].n.y()),
                                         std::abs(frustumPlanes[plane].n.z())};
   }

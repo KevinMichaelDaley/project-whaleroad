@@ -1,6 +1,6 @@
 #pragma once
-#include "common/constants.h"
 #include "camera.h"
+#include "common/constants.h"
 #include "drawable.h"
 #include "vox/block.h"
 #include <Magnum/GL/Buffer.h>
@@ -59,14 +59,14 @@ const float FacesNormal[6][3] = {{0, 0, -1}, {0, 0, 1},  // bottom, top
                                  {-1, 0, 0}, {1, 0, 0}}; // left, right
 
 class chunk_mesh {
-friend world_view;
+  friend world_view;
   std::atomic<bool> update_queued;
   std::mutex ready_for_gpu_copy;
   friend class block_default_forward_pass;
   bool force_dirty, dirty;
   size_t vbo_sz;
-  int Nverts[constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT];
-  bool changed[constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT];
+  int Nverts[constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT];
+  bool changed[constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT];
   typedef GL::Attribute<0, UnsignedInt> L1;
   typedef GL::Attribute<1, UnsignedInt> L2;
   typedef GL::Attribute<2, Vector3> pos;
@@ -82,18 +82,20 @@ public:
   };
 
 protected:
-  BVertex verts[constants::WORLD_HEIGHT*constants::CHUNK_WIDTH*constants::CHUNK_WIDTH];
+  BVertex verts[constants::WORLD_HEIGHT * constants::CHUNK_WIDTH *
+                constants::CHUNK_WIDTH];
   GL::Buffer vertexBufferCube, vertexBuffer, indexBufferCube;
-  GL::Mesh mesh[constants::WORLD_HEIGHT/constants::CHUNK_HEIGHT];
+  GL::Mesh mesh[constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT];
 
 public:
   int x0, y0;
   int volume;
+
 public:
-  bool is_dirty(world* w);
-  void update(world* w);
-  void gen(world* w);
-  void gen_column(int x, int y, world* w);
+  bool is_dirty(world *w);
+  void update(world *w);
+  void gen(world *w);
+  void gen_column(int x, int y, world *w);
   bool gen_instance(int x, int y, int z, block_t b, int *Lf);
   void copy_back();
   void start_at(int x, int y);
@@ -102,19 +104,25 @@ public:
   void force_change() { force_dirty = true; }
   void copy_to_gpu(int z);
   bool is_visible(camera cam, int z0) {
-    return (Nverts[z0] > 0) && cam.frustum_cull_box(Range3D{{x0,y0,z0*constants::CHUNK_HEIGHT},{x0+constants::CHUNK_WIDTH,y0+constants::CHUNK_WIDTH, z0*constants::CHUNK_HEIGHT+constants::CHUNK_HEIGHT}});
+    return (Nverts[z0] > 0) &&
+           cam.frustum_cull_box(Range3D{
+               {x0, y0, z0 * constants::CHUNK_HEIGHT},
+               {x0 + constants::CHUNK_WIDTH, y0 + constants::CHUNK_WIDTH,
+                z0 * constants::CHUNK_HEIGHT + constants::CHUNK_HEIGHT}});
   }
-  float min_depth(camera cam,int z0){
-      float zmin=1000000000;
-      Vector4 corner1=Vector4{constants::CHUNK_WIDTH+x0, constants::CHUNK_WIDTH+y0, (z0+1)*constants::CHUNK_HEIGHT,1.0};
-      Vector4 corner2=Vector4{x0,y0,z0*constants::CHUNK_HEIGHT,1.0};
-      Vector4 corner_p=((cam.projection*cam.view)*corner1);
-      zmin=std::min(zmin,corner_p.z()/corner_p.w()*0.5f+0.5f);
-      corner_p=((cam.projection*cam.view)*corner2);
-      zmin=std::min(zmin,corner_p.z()/corner_p.w()*0.5f+0.5f);
-      return zmin;
+  float min_depth(camera cam, int z0) {
+    float zmin = 1000000000;
+    Vector4 corner1 =
+        Vector4{constants::CHUNK_WIDTH + x0, constants::CHUNK_WIDTH + y0,
+                (z0 + 1) * constants::CHUNK_HEIGHT, 1.0};
+    Vector4 corner2 = Vector4{x0, y0, z0 * constants::CHUNK_HEIGHT, 1.0};
+    Vector4 corner_p = ((cam.projection * cam.view) * corner1);
+    zmin = std::min(zmin, corner_p.z() / corner_p.w() * 0.5f + 0.5f);
+    corner_p = ((cam.projection * cam.view) * corner2);
+    zmin = std::min(zmin, corner_p.z() / corner_p.w() * 0.5f + 0.5f);
+    return zmin;
   }
-  void draw(GL::AbstractShaderProgram* program, int z){
+  void draw(GL::AbstractShaderProgram *program, int z) {
     mesh[z].draw(*program);
   }
 };

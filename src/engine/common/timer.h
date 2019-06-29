@@ -6,8 +6,8 @@ private:
   static std::chrono::high_resolution_clock::time_point t1_, t0_;
 
 public:
-  static void set_start() ;
-  static double now() ;
-  static double step() ;
+  static void set_start();
+  static double now();
+  static double step();
   static void next();
 };

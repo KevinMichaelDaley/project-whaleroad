@@ -12,11 +12,12 @@ double timer::now() {
              std::chrono::high_resolution_clock::now() - t_start)
       .count();
 }
-double timer::step() { return std::chrono::duration_cast<std::chrono::duration<double>>(t1_ - t0_).count(); }
+double timer::step() {
+  return std::chrono::duration_cast<std::chrono::duration<double>>(t1_ - t0_)
+      .count();
+}
 void timer::next() {
   t0_ = t1_;
   t1_ = std::chrono::high_resolution_clock::now();
 }
-double now(){
-    return timer::now();
-}
+double now() { return timer::now(); }

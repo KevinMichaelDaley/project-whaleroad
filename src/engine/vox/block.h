@@ -1,7 +1,15 @@
 #pragma once
 #include <cstdint>
 enum block_value : int16_t {
-  EMPTY = 0, AIR, WATER, SAND, GRASS, STONE, DIRT, SNOW, SANDSTONE
+  EMPTY = 0,
+  AIR,
+  WATER,
+  SAND,
+  GRASS,
+  STONE,
+  DIRT,
+  SNOW,
+  SANDSTONE
 };
 typedef int16_t block_t;
 constexpr const block_t SEA = WATER;

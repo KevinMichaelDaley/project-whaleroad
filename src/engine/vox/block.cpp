@@ -1,6 +1,6 @@
 #include "block.h"
 #include <cmath>
-#define ABS(x) ((x>0)*x+(x<0)*(-x))
+#define ABS(x) ((x > 0) * x + (x < 0) * (-x))
 bool block_is_slippery(block_t block) {
   return (block != STONE) && (block != SANDSTONE);
 }

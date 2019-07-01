@@ -18,8 +18,8 @@ bool chunk_mesh::gen_instance(int x, int y, int z, block_t b, int *Lf) {
   unsigned char L5 = (uint8_t)Lf[4];
   unsigned char L6 = (uint8_t)Lf[5];
   uint32_t L1u = uint32_t(z2 % constants::CHUNK_HEIGHT) +
-                 (uint32_t(xydiff) << 5uL) + (uint32_t(which % 8192) << 13uL) +
-                 ((L6 / 4) << 21uL);
+                 (uint32_t(xydiff) << 6uL) + (uint32_t(which % 4096) << 14uL) +
+                 ((L6 / 4) << 24uL);
   uint32_t L2u = (uint32_t(L1 / 4 + ((L2 / 4) << 6uL) + ((L3 / 4) << 12uL) +
                            ((L4 / 4) << 18uL) + ((L5 / 4) << 24uL)));
   v.L1 = L1u;
@@ -27,8 +27,8 @@ bool chunk_mesh::gen_instance(int x, int y, int z, block_t b, int *Lf) {
   int N =
       constants::CHUNK_HEIGHT * constants::CHUNK_WIDTH * constants::CHUNK_WIDTH;
   int z0 = z / constants::CHUNK_HEIGHT;
-  verts[z0 * N + (Nverts[z0]++)] = v;
-  changed[z0] = true;
+  verts[z0 * N + (Nverts2[z0]++)] = v;
+  changed2[z0] = true;
   return true;
 }
 void chunk_mesh::gen_column(int x, int y, world *wld) {
@@ -76,7 +76,7 @@ void chunk_mesh::gen_column(int x, int y, world *wld) {
           uint8_t *L1 = wld->get_light(x + x0 + dx + dx1, y + y0 + dy + dy1,
                                        z + dz + dz1);
           ;
-          Lsum[m] += std::min(255, int(L1[m]) + int(L1[m + 6]) / 6);
+          Lsum[m] += std::min(255, int(L1[m]+L1[m + 6] / 6));
           N[m] += 1;
           // printf("%i", L[1]);
         }
@@ -100,15 +100,20 @@ void chunk_mesh::gen(world *wld) {
   volume = 0;
   for (int i = 0; i < constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT; ++i) {
     if (Nverts[i] == 0) {
+      Nverts2[i]=0;
       continue;
     }
-    Nverts[i] = 0;
-    changed[i] = true;
+    Nverts2[i] = 0;
+    changed2[i] = true;
   }
   for (int x = 0; x < constants::CHUNK_WIDTH; ++x) {
     for (int y = 0; y < constants::CHUNK_WIDTH; ++y) {
       gen_column(x, y, wld);
     }
+  }
+  for (int i = 0; i < constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT; ++i) {
+    Nverts[i]=Nverts2[i];
+    changed[i]=changed2[i];
   }
 }
 
@@ -159,7 +164,7 @@ struct CubeVertex {
   float u, v;
   unsigned int face_index1, faceindex2, faceindex3;
 };
-chunk_mesh::chunk_mesh() : vbo_sz(0), update_queued{false} {
+chunk_mesh::chunk_mesh() :  update_queued{false} {
 
   std::array<uint8_t, 6 * 2 * 3> indices;
   std::array<CubeVertex, 6 * 4> vertices;
@@ -252,8 +257,9 @@ chunk_mesh::chunk_mesh() : vbo_sz(0), update_queued{false} {
         .setInstanceCount(0)
         .setCount(max_index);
     changed[i] = false;
+    vbo_sz[i] = 0;
   }
-  vbo_sz = 0;
+  
   force_dirty = false;
 }
 void chunk_mesh::start_at(int x_, int y_) {
@@ -261,23 +267,23 @@ void chunk_mesh::start_at(int x_, int y_) {
   y0 = y_;
 }
 void chunk_mesh::copy_to_gpu(int z) {
+    
+  std::lock_guard<std::mutex> lock(ready_for_gpu_copy);
   int index = z;
   if (!changed[index])
     return;
-  if (vbo_sz == 0) {
-    vbo_sz = constants::WORLD_HEIGHT * constants::CHUNK_WIDTH *
-             constants::CHUNK_WIDTH;
-    std::lock_guard<std::mutex> lock(ready_for_gpu_copy);
-    vertexBuffer.setData({(const void *)&verts[0], vbo_sz * sizeof(BVertex)},
-                         GL::BufferUsage::DynamicDraw);
+  if (vbo_sz[index] < Nverts[index]) {
+    vbo_sz[index] = Nverts[index];
+    vertexBuffer.setData({(const void *)&verts[0], vbo_sz[index] * sizeof(BVertex)},
+                         GL::BufferUsage::StaticDraw);
 
   } else {
     size_t N = constants::CHUNK_WIDTH * constants::CHUNK_WIDTH *
                constants::CHUNK_HEIGHT;
-    std::lock_guard<std::mutex> lock(ready_for_gpu_copy);
+    
     vertexBuffer.setSubData(
         index * N * sizeof(BVertex),
-        {(const void *)&(verts[index * N]), N * sizeof(BVertex)});
+        {(const void *)&(verts[index * N]), Nverts[index] * sizeof(BVertex)});
   }
   mesh[index].setInstanceCount(Nverts[index]);
   changed[index] = false;

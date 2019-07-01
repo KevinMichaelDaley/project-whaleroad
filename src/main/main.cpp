@@ -64,13 +64,16 @@ public:
     #ifndef __ANDROID__
       :  Platform::Sdl2Application(
                                   arguments,
-                                  Configuration{}.setWindowFlags(Magnum::Platform::Sdl2Application::Configuration::WindowFlag::Fullscreen | Magnum::Platform::Sdl2Application::Configuration::WindowFlag::MouseLocked).setSize({2560,1080})
+                                  Configuration{}.setWindowFlags(Magnum::Platform::Sdl2Application::Configuration::WindowFlag::Fullscreen).setSize({2560,1080})
+#ifndef __ANDROID__
+                                  , GLConfiguration{}.setVersion(GL::Version::GL330)   
+#endif
                                   ) ,
           argc(arguments.argc),
           argv(arguments.argv)
       {
     setSwapInterval(0);
-    setMouseLocked(true);  
+    setMouseLocked(true);
 #else
     :  Platform::AndroidApplication(
                                   arguments
@@ -189,7 +192,6 @@ public:
     world_view::update_occlusion_radius(wv_,draw_dist);
     wv_->initialize_meshes();
     
-    
     timer::set_start();
     scene_.get_player(0)->spawn(/*player::flags::SPAWN_ON_SURFACE |
                    player::flags::SPAWN_RANDOM_XY*/);
@@ -209,12 +211,7 @@ public:
   }
 
 private:
-  void tickEvent() 
-#ifndef __ANDROID__
-    override {
-#else
-    {
-#endif
+  void tickEvent() {
   /*  if (!player0->is_alive()) {
       die();
     }*/
@@ -234,9 +231,7 @@ private:
     redraw();
   } 
   virtual void drawEvent() override {
-#ifdef __ANDROID__
-      tickEvent();
-#endif
+    tickEvent();
     GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
     GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
     GL::defaultFramebuffer.clear(GL::FramebufferClear::Color | GL::FramebufferClear::Depth);
@@ -249,8 +244,10 @@ private:
 #ifndef TOUCH_CONTROLS
     scene_.get_player(0)->mousemove(event.relativePosition().x(),
                                      event.relativePosition().y());
-#else
     
+    pos_y=event.position().x(); 
+    pos_x=event.position().y();
+#else
     if(event.position().x()>windowSize().x()/2){
         scene_.get_player(0)->mousemove((event.position().x()-pos_x)*0.1,
                                      (event.position().y()-pos_y)*0.1);
@@ -263,7 +260,7 @@ private:
     pos_y=event.position().x(); 
     pos_x=event.position().y();
     touch_time=0.0;
-#endif
+ #endif
   }
 
 

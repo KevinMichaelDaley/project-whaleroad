@@ -7,7 +7,7 @@
 #include <dlfcn.h>
 #include <sys/mman.h>
 using namespace Magnum;
-#define WORLD_SCALE 40
+#define WORLD_SCALE 0
 #define WORLD_OFFSET 10
 class world_builder {
 private:

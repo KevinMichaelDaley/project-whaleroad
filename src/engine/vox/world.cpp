@@ -584,6 +584,7 @@ world_page *world::load_new_page(int x, int y, int z) {
   world_page *last_page =
       &(current_[num_pages % constants::MAX_RESIDENT_PAGES]);
   last_page->swap();
+  last_page->~world_page();
   new (last_page) world_page(nearest_multiple_down(x, constants::PAGE_DIM),
                              nearest_multiple_down(y, constants::PAGE_DIM), 0,
                              constants::PAGE_DIM, this);
@@ -710,9 +711,9 @@ void world_view::update_occlusion_radius(world_view *wv_, int subradius) {
   int y0 = c1 - (subradius);
   int x1 = c0 + (subradius);
   int y1 = c1 + (subradius);
-  for (int ix = x0; ix <= nearest_multiple(x1, 32); ix += 32) {
-    for (int iy = y0; iy <= nearest_multiple(y1, 32); iy += 32) {
-      wv_->update_occlusion(ix, ix + 32, iy, iy + 32, 0);
+  for (int ix = x0; ix <= nearest_multiple(x1, constants::CHUNK_WIDTH); ix += constants::CHUNK_WIDTH) {
+    for (int iy = y0; iy <= nearest_multiple(y1, constants::CHUNK_WIDTH); iy += constants::CHUNK_WIDTH) {
+      wv_->update_occlusion(ix, ix + constants::CHUNK_WIDTH, iy, iy + constants::CHUNK_WIDTH, 0);
     }
   }
 }
@@ -764,7 +765,7 @@ void world_view::update_occlusion(int x0, int x1, int y0, int y1, int tid,
                                   int D) {
   if (inputs == nullptr) {
     inputs = (int16_t *)malloc((uint64_t)(
-        sizeof(int16_t) * constants::MAX_CONCURRENCY * 84 * 84 *
+        sizeof(int16_t) * constants::MAX_CONCURRENCY * (constants::CHUNK_WIDTH+constants::MAX_OCCLUSION_RADIUS*2) * (constants::CHUNK_WIDTH+constants::MAX_OCCLUSION_RADIUS*2) *
         constants::WORLD_HEIGHT * (constants::LIGHT_COMPONENTS + 4)));
   }
   x0 -= D;
@@ -777,10 +778,10 @@ void world_view::update_occlusion(int x0, int x1, int y0, int y1, int tid,
   int N = std::max(x1 + 1 - x0, y1 + 1 - y0);
   int N3 = N;
 
-  int16_t *input = &(inputs[tid * 84 * 84 * constants::WORLD_HEIGHT *
+  int16_t *input = &(inputs[tid * (constants::CHUNK_WIDTH+constants::MAX_OCCLUSION_RADIUS*2) * (constants::CHUNK_WIDTH+constants::MAX_OCCLUSION_RADIUS*2) * constants::WORLD_HEIGHT *
                             (constants::LIGHT_COMPONENTS + 4)]);
-  int sun_depth[84 * 84] = {0};
-  bool neighbor_mask[84 * 84] = {0};
+  int sun_depth[(constants::CHUNK_WIDTH+constants::MAX_OCCLUSION_RADIUS*2) * (constants::CHUNK_WIDTH+constants::MAX_OCCLUSION_RADIUS*2)] = {0};
+  bool neighbor_mask[(constants::CHUNK_WIDTH+constants::MAX_OCCLUSION_RADIUS*2) * (constants::CHUNK_WIDTH+constants::MAX_OCCLUSION_RADIUS*2)] = {0};
   std::memset(neighbor_mask, 0, N3 * N3 * sizeof(bool));
   constexpr int N2 = 4 + constants::LIGHT_COMPONENTS;
 
@@ -788,7 +789,7 @@ void world_view::update_occlusion(int x0, int x1, int y0, int y1, int tid,
   world_page *page = nullptr;
   uint64_t changed = 0;
   volatile block_t *barray = nullptr;
-  unsigned i = 0, j = 0;
+  int i = 0, j = 0;
   {
     std::lock_guard<std::mutex> page_lock(wld->page_mutex);
     page = wld->get_page_unsafe(x0, y0, 0);
@@ -932,7 +933,7 @@ void world_view::update_occlusion(int x0, int x1, int y0, int y1, int tid,
         uint8_t occ[5][R * R * 4] = {{0}};
         int zmaxneighbor = z;
         bool occ_any[5] = {false, false, false, false, false};
-
+        int indices[6]={0,1,2,2,3,4};
         int16_t *ip0 = &input[(((i)*N3 + j) * constants::WORLD_HEIGHT) * N2 +
                               constants::LIGHT_COMPONENTS];
         if (i >= D && i < N - D) {
@@ -996,9 +997,9 @@ void world_view::update_occlusion(int x0, int x1, int y0, int y1, int tid,
                       for (int i3 = x0; i3 <= x1; ++i3) {
                         for (int j3 = y0; j3 <= y1; ++j3) {
                           int occ_index = (i3 * R * 2 + j3);
-                          occ[f * 2 + sb - 1][occ_index] =
-                              std::max(occ[f * 2 + sb - 1][occ_index], dzw);
-                          occ_any[f * 2 + sb - 1] = true;
+                          occ[indices[f * 2 + sb]][occ_index] =
+                              std::max(occ[indices[f * 2 + sb]][occ_index], dzw);
+                          occ_any[indices[f * 2 + sb]] = true;
                         }
                       }
                       dx *= sg;
@@ -1041,7 +1042,7 @@ void world_view::update_occlusion(int x0, int x1, int y0, int y1, int tid,
           if (!occ_any[m - 1]) {
 
             // if(FacesOffset[m%6][2]<0) continue;
-            int Lold = Lbase[(k + 1) * constants::LIGHT_COMPONENTS + m];
+            int Lold = Lbase[(k) * constants::LIGHT_COMPONENTS + m];
             max_delta = std::max(max_delta, std::abs(255 - (int)Lold));
             Lbase[(k)*constants::LIGHT_COMPONENTS + m] = 255u;
 
@@ -1063,9 +1064,9 @@ void world_view::update_occlusion(int x0, int x1, int y0, int y1, int tid,
             ao = std::min(((ao)) / (R * R * 4), 255);
 
             // if(FacesOffset[m%6][2]<0) continue;
-            int Lold = Lbase[(k)*constants::LIGHT_COMPONENTS + m];
+            int Lold =  Lbase[(k)*constants::LIGHT_COMPONENTS + m];
             max_delta = std::max(max_delta, std::abs((int)ao - (int)Lold));
-            Lbase[(k)*constants::LIGHT_COMPONENTS + m] = ao;
+            Lbase[(k)*constants::LIGHT_COMPONENTS + m]=ao;
             input[((i * N3 + j) * constants::WORLD_HEIGHT + k + 1) * N2 + m] =
                 255 - ao;
             input[((i * N3 + j) * constants::WORLD_HEIGHT + k + 1) * N2 + m +
@@ -1127,7 +1128,7 @@ void world_view::update_occlusion(int x0, int x1, int y0, int y1, int tid,
             int Lold = (int)L0[m];
             int Lnew =
                 std::max(0.1, std::min(float(Lold) + (L1[m] * 254.0), 254.0));
-            Lbase[k * constants::LIGHT_COMPONENTS + m] = (uint8_t)Lnew;
+            Lbase[k * constants::LIGHT_COMPONENTS + m]=Lnew;
             int delta = (int)Lnew - (int)Lold;
             max_delta = std::max(std::abs(delta), max_delta);
           }
@@ -1135,7 +1136,7 @@ void world_view::update_occlusion(int x0, int x1, int y0, int y1, int tid,
         ao = std::min(ao, 255);
         for (int k = z + 1; k < zmaxneighbor + 1; ++k) {
           for (int m = 1; m < constants::LIGHT_COMPONENTS; m += 6) {
-            Lbase[k * constants::LIGHT_COMPONENTS + m] = (unsigned)ao;
+           Lbase[k * constants::LIGHT_COMPONENTS + m] = (unsigned)ao;
           }
         }
 
@@ -1169,10 +1170,10 @@ void world_view::update_visible_list(
     int dy) { //every time the player moves one chunk along x or y, we have to update the corresponding row/column of chunks in the distance to maintain the current draw distance.\
                                             //this function does that by moving the pointer to every chunk mesh to a different position in the visible array and changing the starting position of the ones that just became invisible and triggering a mesh update for those chunks.
   // this way, we don't actually have to reallocate anything, which is good.
-  std::vector<chunk_mesh *> all_visible2;
+  all_visible2.clear();
   all_visible2.resize(all_visible.size());
-  std::vector<chunk_mesh *> reuse;
   int Nx = (radius / constants::CHUNK_WIDTH * 2 + 1);
+  reuse.clear();
   reuse.reserve(Nx);
   for (int i = -radius; i <= radius; i += constants::CHUNK_WIDTH) {
     int cx = (i + radius) / constants::CHUNK_WIDTH;
@@ -1241,12 +1242,45 @@ void world_view::update_visible_list(
 class mesh_update_job : public job {
 private:
   world_view *wv;
-
+  static mesh_update_job* jobs;
+  static volatile bool* jobs_free_list;
 public:
+  void* operator new  ( std::size_t count ){
+      if(count==1){
+        if(jobs==nullptr){
+            jobs=(mesh_update_job*)malloc(sizeof(mesh_update_job)*65536);
+            jobs_free_list=(volatile bool*)malloc(sizeof(bool)*65536);
+            
+            for(int i=1; i<65536; ++i){
+                jobs_free_list[i]=true;
+            }
+            jobs_free_list[0]=false;
+            return &(jobs[0]);
+        }
+        for(int i=0; i<65536; ++i){
+                if(__sync_bool_compare_and_swap(&(jobs_free_list[i]),true,false)){
+                    return &(jobs[i]);
+                }
+        }
+      }
+      return malloc(count*sizeof(mesh_update_job));
+  }
+        
+  void operator delete  ( void* ptr ) noexcept{
+      ptrdiff_t x=(ptrdiff_t) ptr,y=(ptrdiff_t) jobs;
+      ptrdiff_t i=(x-y)/sizeof(mesh_update_job);
+      if(i>=0 && i<65536){
+        __sync_bool_compare_and_swap(&(jobs_free_list[i]),false,true);
+      }
+      else{
+          free(ptr);
+      }
+  }
   mesh_update_job(world_view *wv_) : wv(wv_) {}
   virtual void run(world *w, int tid) { wv->remesh_from_queue(tid); }
 };
-
+mesh_update_job* mesh_update_job::jobs=nullptr;
+volatile bool* mesh_update_job::jobs_free_list=nullptr;
 void world_view::initialize_meshes(int subradius) {
   int Nx = (radius / constants::CHUNK_WIDTH * 2 + 1);
   for (int i = -radius; i <= radius; i += constants::CHUNK_WIDTH) {
@@ -1327,34 +1361,31 @@ void world_view::queue_update_stale_meshes() { // add all meshes with stale
     }
   }
 }
-
 void world_view::add_remesh_jobs() {
   for (int i = 0; i < std::max(constants::MAX_CONCURRENCY - 1, 2); ++i) {
-    workers->add_job(new mesh_update_job(this));
+    mesh_update_job* j=new mesh_update_job(this);
+    workers->add_job(j);
   }
 }
 void world_view::remesh_from_queue(int tid) {
   chunk_mesh *mesh_update = nullptr;
+    for (int j = 0; j < 5; ++j) {
+        if (!fast_update_queue.try_dequeue(mesh_update))
+        break;
+        update_occlusion(mesh_update->x0, mesh_update->x0 + constants::CHUNK_WIDTH,
+                        mesh_update->y0, mesh_update->y0 + constants::CHUNK_WIDTH,
+                        tid);
+        mesh_update->update(wld);
+    }
+    for (int j = 0; j < 5; ++j) {
 
-  for (int j = 0; j < 5; ++j) {
-    if (!fast_update_queue.try_dequeue(mesh_update))
-      break;
-    update_occlusion(mesh_update->x0, mesh_update->x0 + constants::CHUNK_WIDTH,
-                     mesh_update->y0, mesh_update->y0 + constants::CHUNK_WIDTH,
-                     tid);
-    mesh_update->update(wld);
-  }
-  for (int j = 0; j < 5; ++j) {
-
-    if (!mesh_update_queue.try_dequeue(mesh_update))
-      break;
-    update_occlusion(mesh_update->x0, mesh_update->x0 + constants::CHUNK_WIDTH,
-                     mesh_update->y0, mesh_update->y0 + constants::CHUNK_WIDTH,
-                     tid);
-    mesh_update->update(wld);
-  }
-
-  first_frame = false;
+        if (!mesh_update_queue.try_dequeue(mesh_update))
+        break;
+        update_occlusion(mesh_update->x0, mesh_update->x0 + constants::CHUNK_WIDTH,
+                        mesh_update->y0, mesh_update->y0 + constants::CHUNK_WIDTH,
+                        tid);
+        mesh_update->update(wld);
+    }
 }
 
 const std::vector<chunk_mesh *> &world_view::get_all_visible() {

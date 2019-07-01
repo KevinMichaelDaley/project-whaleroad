@@ -64,9 +64,11 @@ class chunk_mesh {
   std::mutex ready_for_gpu_copy;
   friend class block_default_forward_pass;
   bool force_dirty, dirty;
-  size_t vbo_sz;
-  int Nverts[constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT];
-  bool changed[constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT];
+  size_t vbo_sz[constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT];
+  std::atomic<int> Nverts[constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT];
+  int Nverts2[constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT];
+  std::atomic<bool> changed[constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT];
+  bool changed2[constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT];
   typedef GL::Attribute<0, UnsignedInt> L1;
   typedef GL::Attribute<1, UnsignedInt> L2;
   typedef GL::Attribute<2, Vector3> pos;
@@ -123,6 +125,7 @@ public:
     return zmin;
   }
   void draw(GL::AbstractShaderProgram *program, int z) {
+    std::lock_guard<std::mutex> lock(ready_for_gpu_copy);
     mesh[z].draw(*program);
   }
 };

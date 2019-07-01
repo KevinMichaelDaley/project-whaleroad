@@ -16,5 +16,5 @@ cd ..
 
 mkdir -p build/Release
 cd ./build/Release
-cmake ../../src -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O3 -mtune=native" -DCMAKE_PREFIX_PATH="$(pwd)/../deps" -DMagnum_DIR="../deps/share/cmake/Magnum/"
+cmake ../../src -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O3 -mtune=native -Wno-old-style-cast -Wno-reorder -Wno-unused-variable -Wno-double-promotion" -DCMAKE_PREFIX_PATH="$(pwd)/../deps" -DMagnum_DIR="../deps/share/cmake/Magnum/"
 make -j

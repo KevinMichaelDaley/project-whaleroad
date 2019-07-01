@@ -423,7 +423,7 @@ Magnum::GL::Framebuffer::Status::Complete )
     fsquad.draw(sky);
     indices.clear();
     min_depth.clear();
-    vis.resize(all_chunks.size(), 0);
+    vis.resize(all_chunks.size()*(constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT), 0);
     GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
     for (int i = 0, e = all_chunks.size() *
                         (constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT);
@@ -458,8 +458,7 @@ Magnum::GL::Framebuffer::Status::Complete )
         continue;
       }
       vis[ixc]++;
-      if (vis[ixc] < 2 || q[ixc]->result<bool>()) {
-        vis[ixc] = true;
+      if (vis[ixc] < 4 || q[ixc]->result<bool>()) {
         gbuffer.uniform("x0", chunk->x0);
         gbuffer.uniform("y0", chunk->y0);
         gbuffer.uniform("z0", z0 * constants::CHUNK_HEIGHT);

@@ -123,7 +123,7 @@ private:
   bool first_frame;
   world *wld;
   bool updated_center;
-  std::vector<chunk_mesh *> all_visible;
+  std::vector<chunk_mesh *> all_visible,all_visible2,reuse;
   int center[3], center_old[3];
   int radius;
   moodycamel::ConcurrentQueue<chunk_mesh *> mesh_update_queue;
@@ -144,7 +144,7 @@ public:
         first_frame{true}, updated_center{true}, workers{workers_} {}
   void update_center(Vector3 player_position);
   static void update_occlusion_radius(world_view *thisp, int subradius);
-  void update_occlusion(int x0, int x1, int y0, int y1, int tid, int D = 2);
+  void update_occlusion(int x0, int x1, int y0, int y1, int tid, int D = constants::MAX_OCCLUSION_RADIUS);
   void add_remesh_jobs();
   static int nearest_multiple(int x, int base);
   void update_visible_list(int dx, int dy);

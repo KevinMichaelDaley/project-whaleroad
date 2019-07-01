@@ -25,7 +25,7 @@ public:
     chisel_strength = 4;
     max_block_health = -1;
     look_x = 0;
-    look_y = 1;
+    look_y = 0;
     jump_down = false;
     w_down = false;
     a_down = false;

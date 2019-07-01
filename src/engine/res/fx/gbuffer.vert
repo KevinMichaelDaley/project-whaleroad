@@ -16,20 +16,20 @@
 			
             void main(){
                 
-				uint which=uint(L1>>13u)%8192u;
+				uint which=uint(L1>>14u)%4096u;
 				int L1x=int((L2>>(6u*(face_index)))%64u)*int(face_index<5u);
-				L1x+=int((L1>>21u)&0xffu)*int(face_index==5u);
+				L1x+=int((L1>>24u)&0xffu)*int(face_index==5u);
 				
 				int L1y=int((L2>>(6u*(face_neighbor1)))%64u)*int(face_neighbor1<5u);
-				L1y+=int((L1>>21u)&0xffu)*int(face_neighbor1==5u);
+				L1y+=int((L1>>24u)&0xffu)*int(face_neighbor1==5u);
 				
 				int L1z=int((L2>>(6u*(face_neighbor2)))%64u)*int(face_neighbor2<5u);
-				L1z+=int((L1>>21u)&0xffu)*int(face_neighbor2==5u);
+				L1z+=int((L1>>24u)&0xffu)*int(face_neighbor2==5u);
 				/*int L1y=(int(L2>>8u)>>(4*int(face_neighbor1)))%16;
 				int L1z=(int(L2>>8u)>>(4*int(face_neighbor2)))%16;*/
-				uint xydiff=(uint(L1)>>5u)&0xffu;
+				uint xydiff=(uint(L1)>>6u)&0xffu;
 				
-				ivec3 positioni=ivec3(int(xydiff)/16+x0,int(xydiff)%16+y0,int(L1%32u)+z0); 
+				ivec3 positioni=ivec3(int(xydiff)/16+x0,int(xydiff)%16+y0,int(L1%64u)+z0); 
 								
 				vec3 position=vec3(float(positioni.x),float(positioni.y),float(positioni.z))+pos;
 				

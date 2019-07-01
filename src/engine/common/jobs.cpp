@@ -10,6 +10,7 @@ void job_pool::do_work(job_pool *thisptr, int tid) {
   while (true) {
     if (thisptr->q.try_dequeue(next_job)) {
       next_job->run(thisptr->w, tid);
+      delete next_job;
     }
   }
 }

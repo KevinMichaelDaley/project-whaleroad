@@ -4,7 +4,8 @@
 class world;
 class job {
 public:
-  virtual void run(world *w, int tid) = 0;
+  virtual void run(world *w, int tid) = 0;  
+  virtual ~job(){}
 };
 class job_pool {
 private:

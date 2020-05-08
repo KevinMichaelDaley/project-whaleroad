@@ -8,14 +8,45 @@ class player : public character {
   bool jump_down, w_down, a_down, s_down, d_down;
   std::string name_;
   float sensitivity;
-
+  
 public:
   int target[3];
+  bool raycast(int pix_x, int pix_y, int tlim=256){
+      float xx, yy, zz;
+      float rx, ry, rz;
+      dir(rx, ry, rz);
+      eye(xx, yy, zz);
+      float n = std::sqrt(rx * rx + ry * ry + rz * rz);
+      rx /= n;
+      ry /= n;
+      rz /= n;
+      float t = 0;
+      world *wld = get_world();
+      Matrix4 unproj = viewProj.inverted();
+      Vector3 eye_ = unproj.transformPoint({pix_x, pix_y, 0.0});
+      xx = eye_.x();
+      yy = eye_.y();
+      zz = eye_.z();
+      block_target_type = 0;
+      while (t < tlim) {
+          float x2 = xx + t * rx, y2 = yy + t * ry, z2 = zz + t * rz;
+          block_t b = wld->get_voxel(x2, y2, z2);
+          block_health = 100000;
+          if (b > WATER) {
+            target[0] = floor(x2);
+            target[1] = floor(y2);
+            target[2] = floor(z2);
+            return true;
+          }
+          t += 0.5f;
+      }
+      return false;
+  }
   virtual std::string get_name() { return name_; }
-  player(std::string name, world *wld, int sx = 0, int sy = 0, int sz = 0,
+  player(std::string name, world *wld, bool use_physics_=true, int sx = 0, int sy = 0, int sz = 0,
          bool spawn_random = true, bool spawn_on_surface = true)
       : jump_speed(3.0f), name_(name),
-        character(wld, sx, sy, sz, spawn_random, spawn_on_surface) {
+        character(wld, sx, sy, sz, spawn_random, spawn_on_surface, use_physics_) {
     block_last = 0;
     lag = 0;
     place_block = STONE;

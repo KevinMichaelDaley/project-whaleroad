@@ -41,6 +41,7 @@ endif()
 if(NOT CORRADE_TARGET_ANDROID)
 find_package(GLFW REQUIRED)
 find_package(Magnum REQUIRED GL Trade Sdl2Application TgaImporter)
+find_package(MagnumIntegration REQUIRED ImGui)
 else()
 	find_package(Magnum REQUIRED GL Trade AndroidApplication TgaImporter)
 endif()
@@ -54,12 +55,15 @@ endif()
 FILE(GLOB SOURCE_FILES engine/*/*.cpp main/main.cpp)
 corrade_add_resource(Resources resources.conf)
 if(NOT CORRADE_TARGET_ANDROID)
+	find_library(IMGUI_LIB imgui ${IMGUI_LIB_DIR})
+	add_library(ImGui::ImGui SHARED IMPORTED)
+	set_property(TARGET ImGui::ImGui PROPERTY IMPORTED_LOCATION ${IMGUI_LIB})
 	add_executable(islands ${SOURCE_FILES} ${Resources})
 	target_link_libraries(islands
 			    Magnum::Application
 			    Magnum::GL  
 			    Magnum::Magnum
-			    Magnum::Trade pthread Corrade::Utility)
+			    Magnum::Trade pthread Corrade::Utility MagnumIntegration::ImGui)
 else()
 	add_library(islands SHARED ${SOURCE_FILES} ${Resources})
 	target_link_libraries(islands

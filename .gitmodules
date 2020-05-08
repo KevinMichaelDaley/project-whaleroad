@@ -13,3 +13,9 @@
 [submodule "src/extern/corrade"]
 	path = src/extern/corrade
 	url = https://github.com/mosra/corrade.git
+[submodule "src/extern/imgui"]
+	path = src/extern/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "src/extern/magnum-integration"]
+	path = src/extern/magnum-integration
+	url = https://github.com/mosra/magnum-integration.git

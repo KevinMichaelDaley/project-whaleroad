@@ -3,6 +3,7 @@
 #include "gfx/chunk_mesh.h"
 #include "phys/player.h"
 #include "vox/world.h"
+#include "ui/wrap.h"
 #include "Magnum/GL/Framebuffer.h"
 #include "Magnum/GL/Renderbuffer.h"
 #include "Magnum/PixelFormat.h"
@@ -48,6 +49,7 @@ class game : public Platform::AndroidApplication {
 private:
   block_default_forward_pass* block_pass;
   world_view *wv_;
+  UI* ui;
   job_pool* jobs;
   world* w_;
   scene scene_;
@@ -70,7 +72,8 @@ public:
 #endif
                                   ) ,
           argc(arguments.argc),
-          argv(arguments.argv)
+          argv(arguments.argv),
+          ui(nullptr)
       {
     setSwapInterval(0);
     setMouseLocked(true);
@@ -89,6 +92,7 @@ public:
 #else
     player_name = "new_player";
 #endif
+    if(false) ui=new UI(this);
     std::unique_ptr<Trade::AbstractImporter> importer =
         manager.loadAndInstantiate("TgaImporter");  
     if(!importer) std::exit(1);
@@ -96,7 +100,6 @@ public:
     if(!importer->openData(rs.getRaw("atlas.tga"))){
         std::exit(2);
     }           
-    
     GL::Renderer::setClearColor({0.08,0.069,0.07,1.0});
     Containers::Optional<Trade::ImageData2D> image = importer->image2D(0);
     CORRADE_INTERNAL_ASSERT(image);
@@ -108,7 +111,6 @@ public:
         .generateMipmap();  
     block_pass=new block_default_forward_pass(atlas);
     load_world("world");
-    
     jobs=new job_pool(constants::MAX_CONCURRENCY,w_);
     int x,y,z;
     spawn();
@@ -186,7 +188,7 @@ public:
     scene_.create_default_player(player_name, w_);
 
     //console.load_settings();
-    draw_dist =  96;//get_cvar("r_view_distance");
+    draw_dist =  128;//get_cvar("r_view_distance");
     
     wv_=new world_view{w_,scene_.get_player(0)->get_position(), draw_dist, jobs};
     world_view::update_occlusion_radius(wv_,draw_dist);
@@ -225,22 +227,40 @@ private:
     if(rand()%100==0){
         Debug{}<<timer::step()<<Utility::Debug::newline;
     }
-     wv_->queue_update_stale_meshes();
-     wv_->add_remesh_jobs();
+    wv_->queue_update_stale_meshes();
+    wv_->add_remesh_jobs();
+     
     track_player();
     redraw();
   } 
+  
+  virtual void viewportEvent(ViewportEvent& event) override {
+      if(ui) ui->viewportEvent(event);
+  }
+
   virtual void drawEvent() override {
+//     
+    
     tickEvent();
     GL::Renderer::enable(GL::Renderer::Feature::DepthTest);
     GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
     GL::defaultFramebuffer.clear(GL::FramebufferClear::Color | GL::FramebufferClear::Depth);
     block_pass->set_scene(&scene_).set_player(scene_.get_player(0)).draw_world_view(wv_);
+    if(ui)
+        ui->drawEvent();
     swapBuffers();
     timer::next();
     return;
   }
+  bool is_player_input(){
+      return true;
+  }
   void mouseMoveEvent(MouseMoveEvent &event) override {
+    
+    if(ui) ui->mouseMoveEvent(event);
+    if(!is_player_input()){
+        return;
+    }
 #ifndef TOUCH_CONTROLS
     scene_.get_player(0)->mousemove(event.relativePosition().x(),
                                      event.relativePosition().y());
@@ -265,7 +285,11 @@ private:
 
 
   void mouseReleaseEvent(MouseEvent &event) override {
-      
+    
+    if(ui) ui->mouseReleaseEvent(event);
+    if(!is_player_input()){
+        return;
+    }
 #ifndef TOUCH_CONTROLS
     scene_.get_player(0)->mouseup(
         event.button() == MouseEvent::Button::Left
@@ -283,6 +307,10 @@ private:
     
   }
   void mousePressEvent(MouseEvent &event) override {
+    if(ui) ui->mousePressEvent(event);
+    if(!is_player_input()){
+        return;
+    }
     player *player0 = scene_.get_player(0);
 #ifndef TOUCH_CONTROLS
     
@@ -295,10 +323,13 @@ private:
 #else
     touch=true;
 #endif
-    
   }
 #ifndef TOUCH_CONTROLS
   void keyPressEvent(KeyEvent &event) override {
+    if(ui) ui->keyPressEvent(event);
+    if(!is_player_input()){
+        return;
+    }
     player *player0 = scene_.get_player(0);
     if (event.key() == KeyEvent::Key::Esc) {
       quit();
@@ -306,14 +337,18 @@ private:
     player0->keydown(event.key());
   }
   void keyReleaseEvent(KeyEvent &event) override {
-    player *player0 = scene_.get_player(0);
+    if(ui) ui->keyReleaseEvent(event);
+    if(!is_player_input()){
+        return;
+    }    player *player0 = scene_.get_player(0);
     player0->keyup(event.key());
   }
 #endif
-
 };
 #ifndef __ANDROID__
+#ifndef EDITOR
 MAGNUM_APPLICATION_MAIN(game)
+#endif
 #else
 MAGNUM_ANDROIDAPPLICATION_MAIN(game)
 #endif

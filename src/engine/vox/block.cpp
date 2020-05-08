@@ -43,7 +43,6 @@ void block_albedo(block_t bc, float &r, float &g, float &b) {
     g = 1.0;
     b = 1.0;
   }
-
   else if (bc == GRASS) {
     r = 0.6;
     g = 0.7;

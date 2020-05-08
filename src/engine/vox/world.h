@@ -144,14 +144,14 @@ public:
         first_frame{true}, updated_center{true}, workers{workers_} {}
   void update_center(Vector3 player_position);
   static void update_occlusion_radius(world_view *thisp, int subradius);
-  void update_occlusion(int x0, int x1, int y0, int y1, int tid, int D = constants::MAX_OCCLUSION_RADIUS);
+  void update_occlusion(int x0, int x1, int y0, int y1, int tid, int D = constants::MAX_OCCLUSION_RADIUS, bool threading=false);
   void add_remesh_jobs();
   static int nearest_multiple(int x, int base);
   void update_visible_list(int dx, int dy);
 
   void initialize_meshes(int subradius = 48);
   void queue_update_stale_meshes();
-  void remesh_from_queue(int tid);
+  void remesh_from_queue(int tid, bool threading=false);
 
   const std::vector<chunk_mesh *> &get_all_visible();
   ~world_view();

@@ -1,6 +1,7 @@
 #pragma once
 #include "chunk_mesh.h"
 #include "common/scene.h"
+#include "common/utils.h"
 #include "phys/player.h"
 #include "vox/world.h"
 #include <Corrade/Containers/ArrayView.h>
@@ -23,15 +24,6 @@
 #define SHADOW_CASCADES 4
 #define SMAP_RES(l) 1920
 #define SHADOW_DIST 400.0
-std::string read_text_file(std::string filename) {
-  FILE *f = fopen(filename.c_str(), "r");
-  fseek(f, 0, SEEK_END);
-  std::string a;
-  a.resize(ftell(f), 0);
-  fseek(f, 0, SEEK_SET);
-  fread(&(a[0]), 1, a.size(), f);
-  return a;
-}
 
 using namespace Magnum;
 
@@ -431,8 +423,10 @@ Magnum::GL::Framebuffer::Status::Complete )
       int j = i / (constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT);
       int z0 = i % (constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT);
       indices.push_back(i);
-      float z = all_chunks[j]->min_depth(cam, z0);
-      min_depth.push_back(z);
+      if(all_chunks[j]!=nullptr){
+        float z = all_chunks[j]->min_depth(cam, z0);
+        min_depth.push_back(z);
+      }
     }
     while (q.size() < all_chunks.size() *
                           (constants::WORLD_HEIGHT / constants::CHUNK_HEIGHT)) {

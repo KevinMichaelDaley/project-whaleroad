@@ -5,6 +5,11 @@ void scene::create_default_player(std::string player_name, world *w) {
   entities.push_back(p);
   players.push_back(p);
 }
+void scene::create_editor_player(std::string player_name, world *w, int x, int y, int z) {
+  player *p = new player(player_name, w,false,x,y,z,false,false);
+  entities.push_back(p);
+  players.push_back(p);
+}
 player *scene::get_player(int id) { return players[id]; }
 entity *scene::get_entity(std::string name) {
   assert(name != "");

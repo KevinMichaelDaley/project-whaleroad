@@ -9,7 +9,8 @@ enum block_value : int16_t {
   STONE,
   DIRT,
   SNOW,
-  SANDSTONE
+  SANDSTONE,
+  NUM_BLOCK_TYPES
 };
 typedef int16_t block_t;
 constexpr const block_t SEA = WATER;

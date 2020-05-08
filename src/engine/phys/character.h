@@ -42,10 +42,13 @@ protected:
   Vector3 up_vector;
   world *wld_;
   camera cam;
-
+  bool use_physics;
   float look_pitch, look_yaw;
 
 public:
+  void toggle_physics(){
+      use_physics=!use_physics;
+  }
   camera get_cam() { return cam; }
   world *get_world() { return wld_; }
   void dir(float &rx, float &ry, float &rz) {
@@ -59,9 +62,10 @@ public:
     rz = eye_positions[2] + x[2];
   }
   character(world *wld, float xx = 0, float yy = 0, float zz = 0,
-            bool spawn_random = true, bool spawn_on_surface = true,
+            bool spawn_random = true, bool spawn_on_surface = true, bool use_physics_=true,
             float rx = 0.4, float ry = 0.4, float rz = 0.8,
             float eye_height = 0.6, float angle = 0) {
+    use_physics=use_physics_;
     wld_ = wld;
     first_frame = true;
     health = 1.0f;
@@ -217,6 +221,25 @@ public:
   float sdBox(float y[3], int i, int j, int k) {
     return sdf_box({y[0], y[1], y[2]}, {(float)i, (float)j, (float)k});
   }
+  void update_free_movement(float dt){
+      
+    float dz0 =
+                    walk_vector[2] * friction * dt;
+    float dy = 
+                    walk_vector[1] * friction * dt;
+                    
+    float dx = 
+                    walk_vector[0] * friction * dt;
+    walk_vector[0] = 0;
+    walk_vector[1] = 0;
+    walk_vector[2] = 0;
+
+    x[0] += dx;
+    x[1] += dy;
+    x[2] += dz0;
+  }
+                    
+
   void update_physics(float dt) {
     if (first_frame) {
       fall_start = now();
@@ -426,7 +449,7 @@ public:
     x[1] += dy;
     x[2] += dz;
   }
-  virtual void update(float dt) { update_physics(dt); }
+  virtual void update(float dt) { if(use_physics) update_physics(dt); else update_free_movement(dt); }
   void apply_impulse(float x, float y, float z) {
     xdot[1] += y;
     xdot[0] += x;
@@ -442,22 +465,24 @@ public:
     whichway = whichway.normalized();
     walk_vector[0] += speed * whichway.x();
     walk_vector[1] += speed * whichway.y();
-    walk_vector[2] = 0;
+    if(use_physics)
+        walk_vector[2] = 0;
   }
   void pedal(bool f, float speed) {
     int s = 1 - 2 * !f;
+    
     walk_vector[0] +=
         speed * s * look_vector[0] /
         sqrt(look_vector[0] * look_vector[0] + look_vector[1] * look_vector[1] +
-             look_vector[2] * look_vector[2] * under_water);
+             look_vector[2] * look_vector[2] * (under_water || !use_physics));
     walk_vector[1] +=
         speed * s * look_vector[1] /
         sqrt(look_vector[0] * look_vector[0] + look_vector[1] * look_vector[1] +
-             look_vector[2] * look_vector[2] * under_water);
+             look_vector[2] * look_vector[2] * (under_water || !use_physics));
     walk_vector[2] +=
-        speed * s * look_vector[2] * under_water /
+        speed * s * look_vector[2] * (under_water|| !use_physics) /
         sqrt(look_vector[0] * look_vector[0] + look_vector[1] * look_vector[1] +
-             look_vector[2] * look_vector[2] * under_water);
+             look_vector[2] * look_vector[2] * (under_water || !use_physics));
     ;
   }
   void look(float look_x, float look_y, float dt, int which_head) {
